@@ -1,0 +1,45 @@
+name: EdgeFinder
+
+# Two ways this runs:
+#  1. You press the "Run workflow" button (manual) — this is your "refresh" button.
+#  2. Optionally on a schedule (the cron line below is commented out by default).
+on:
+  workflow_dispatch:        # the manual "Run workflow" button
+  # schedule:
+  #   - cron: '0 19 * * 4,5,6'   # OPTIONAL: auto-run Thu/Fri/Sat at 19:00 UTC (~2pm Central). Uncomment to enable.
+
+# Let the workflow write the dashboard + betlog back into the repo.
+permissions:
+  contents: write
+
+jobs:
+  run-edgefinder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install certifi (helps with SSL)
+        run: pip install --quiet certifi
+
+      - name: Run EdgeFinder
+        env:
+          ODDS_KEY: ${{ secrets.ODDS_KEY }}   # your API key, stored as a GitHub secret
+        run: python edgefinder.py
+
+      - name: Publish dashboard + save bet log
+        run: |
+          git config user.name  "edgefinder-bot"
+          git config user.email "edgefinder-bot@users.noreply.github.com"
+          git add docs/index.html edgefinder_betlog.json edgefinder_history/ 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "EdgeFinder run $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
