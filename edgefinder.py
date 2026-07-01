@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EdgeFinder — Local Dashboard Generator (Windows)
+EdgeFinder: Local Dashboard Generator (Windows)
 =================================================
 Run this and it will:
   1. Fetch fresh odds, sharp money, and live game status for all in-season sports
@@ -14,7 +14,7 @@ Honest notes:
   - Sharp grades + live status are real for US team sports (MLB now; NFL/NBA/NHL/CFB/CBB in season).
   - World Cup & UFC have value scanning but no sharp data (Action Network covers US sports only).
   - Pinnacle is intentionally excluded (paywalled everywhere free; exchanges are often sharper).
-  - Lines move — always re-check Bovada before betting.
+  - Lines move, so always re-check Bovada before betting.
 """
 
 import json, urllib.request, urllib.error, statistics, os, sys, webbrowser, time
@@ -91,7 +91,7 @@ def _ssl_tiers():
         tiers.append(c2)
     except Exception:
         pass
-    # Tier 3 (last resort): no verification — only reached if everything above fails.
+    # Tier 3 (last resort): no verification (only reached if everything above fails).
     # This lets the tool work behind aggressive AV/proxy interception. It still encrypts;
     # it just doesn't verify the cert chain (acceptable for reading public odds data).
     try:
@@ -130,7 +130,7 @@ def gj(url, t=40, retries=3):
             except ssl.SSLError as e:
                 last = e; continue   # next tier
             except Exception as e:
-                last = e; break      # network/timeout — wait then retry
+                last = e; break      # network/timeout, wait then retry
         time.sleep(1)
     if last: raise last
 
@@ -493,21 +493,52 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
   .tplive{font-family:var(--mono);font-size:9.5px;font-weight:800;color:#fff;background:#dc2626;padding:1px 6px;border-radius:4px;animation:blink 1.4s infinite}
   .tpfinal{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
   .tpdelay{font-family:var(--mono);font-size:9.5px;color:var(--split)}
+  .viewtoggle{display:flex;gap:8px;margin-top:12px}
+  .vtab{flex:0 0 auto;background:var(--card2);border:1px solid var(--line);color:var(--mut);font-size:14px;font-weight:700;padding:9px 18px;border-radius:999px;cursor:pointer;transition:all .15s;font-family:inherit}
+  .vtab.active{background:var(--sharp);color:#04130c;border-color:var(--sharp)}
+  .rbig{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap}
+  .rstat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;flex:1;min-width:96px}
+  .rstat .l{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);font-weight:700}
+  .rstat .v{font-size:21px;font-weight:800;font-family:var(--mono);margin-top:2px}
+  .rsect{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--mut);margin:20px 0 9px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .rtable{width:100%;border-collapse:collapse;font-size:13px}
+  .rtable th,.rtable td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line)}
+  .rtable th:first-child,.rtable td:first-child{text-align:left}
+  .rtable th{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:700}
+  .rtable td.g{font-family:var(--mono);font-weight:800}
+  .rcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .pos{color:var(--sharp)}.neg{color:var(--public)}
+  .thin2{color:var(--dim);font-size:10px;font-style:italic}
+  .rnote{color:var(--mut);font-size:11.5px;line-height:1.5;margin-top:7px}
+  .dlrow{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
+  .dlrow a{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;color:#60a5fa;text-decoration:none}
+  .rbar{height:20px;border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-family:var(--mono);font-weight:700;color:#0a0d12;min-width:28px}
+  .rempty{text-align:center;color:var(--mut);padding:40px 20px}
+  .rempty h3{margin-bottom:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="mast"><div class="logo">edge<b>finder</b></div><div class="clock" id="clock"></div></div>
+    <div class="viewtoggle">
+      <button class="vtab active" id="vtab-board" onclick="showView('board')">Today's Board</button>
+      <button class="vtab" id="vtab-results" onclick="showView('results')">Results</button>
+    </div>
+  </header>
+
+  <div id="view-board">
     <div class="sub">True probability blended from multiple no-vig sources, compared to Bovada &amp; Kalshi. Sharp money where available. Only real edges surface.</div>
     <div class="srcrow" id="srcrow"></div>
     <div class="hero" id="hero"></div>
-    <div class="disc">⚠️ <b>All signals are real data.</b> True-probability = no-vig consensus across soft books (Kalshi &amp; Polymarket fold in when their markets are live). Sharp money = live ticket/handle from Action Network (US team sports). Pinnacle is intentionally excluded — it's paywalled on every free feed, and prediction markets are often sharper anyway. Estimates, not guarantees; lines move; re-check before betting. 21+ · 1-800-522-4700.</div>
-  </header>
-  <div class="tabs" id="tabs"></div>
-  <div id="views"></div>
+    <div class="disc">⚠️ <b>All signals are real data.</b> True-probability = no-vig consensus across soft books (Kalshi &amp; Polymarket fold in when their markets are live). Sharp money = live ticket/handle from Action Network (US team sports). Pinnacle is intentionally excluded: it's paywalled on every free feed, and prediction markets are often sharper anyway. Estimates, not guarantees; lines move; re-check before betting. 21+ · 1-800-522-4700.</div>
+    <div class="tabs" id="tabs"></div>
+    <div id="views"></div>
+  </div>
+
+  <div id="view-results" style="display:none"></div>
 </div>
-<footer><a href="stats.html" style="color:#34d399;font-weight:700;text-decoration:none">📊 view stats & results →</a><br>true-prob blend + sharp money, computed live · entertainment / analysis only</footer>
+<footer>true-prob blend + sharp money, computed live · entertainment / analysis only</footer>
 """
 
 TEMPLATE_APP = r"""
@@ -529,18 +560,18 @@ const GRADE_COLOR={S:'#f5c451',A:'#34d399',B:'#60a5fa',C:'#9aa6b6',D:'#646f7f'};
 function marketRow(lbl,side,point,price,isVal){
   const pt=(point!=null&&point!=='None')?` <span style="color:var(--dim)">${(+point>0?'+':'')+point}</span>`:'';
   const valtag=isVal?`<span class="vyes">✓ VALUE</span>`:'';
-  return `<div class="mkrow ${isVal?'best':''}"><span class="mlbl">${lbl}</span><span class="mside">${side}${pt}</span><span class="mprice">${price!=null?amStr(price):'—'}</span>${valtag}</div>`;
+  return `<div class="mkrow ${isVal?'best':''}"><span class="mlbl">${lbl}</span><span class="mside">${side}${pt}</span><span class="mprice">${price!=null?amStr(price):'-'}</span>${valtag}</div>`;
 }
 function gameCard(c){
   const sg=c.sharp_grade;const v=c.value_play;
-  let chip = sg?`<span class="gradechip" style="background:${GRADE_COLOR[sg.grade]};color:#0c0f16">${sg.grade}</span>`:`<span class="gradechip none">—</span>`;
+  let chip = sg?`<span class="gradechip" style="background:${GRADE_COLOR[sg.grade]};color:#0c0f16">${sg.grade}</span>`:`<span class="gradechip none">-</span>`;
   let valbadge = c.has_value?`<span class="badge b-VALUE">✓ VALUE</span>`:`<span class="badge b-PASS">no value</span>`;
   let sharpbadge = sg?`<span class="badge b-SHARP"><span class="d"></span>SHARP ${sg.grade}${sg.contrarian?' ◆':''}${sg.steam?' ⚡':''}</span>`:`<span class="badge b-PASS">no sharp signal</span>`;
   const byMkt={ML:[],SPR:[],TOT:[]};
   c.plays.forEach(p=>{if(byMkt[p.mkt])byMkt[p.mkt].push(p);});
   const isVal=(p)=>p.pass;
   function block(title,arr,labelShort,dataerror){
-    if(dataerror)return `<div class="mblock"><div class="mh">${title}</div><div class="mderr">⚠ Bovada line contradicts the market consensus — suppressed to avoid a false edge.</div></div>`;
+    if(dataerror)return `<div class="mblock"><div class="mh">${title}</div><div class="mderr">⚠ Bovada line contradicts the market consensus, suppressed to avoid a false edge.</div></div>`;
     if(!arr.length)return '';
     const rows=arr.map(p=>marketRow(labelShort,p.side,p.point,p.price,isVal(p))).join('');
     return `<div class="mblock"><div class="mh">${title}</div>${rows}</div>`;
@@ -556,15 +587,15 @@ function gameCard(c){
       rows+=`<div class="splitrow"><div class="lbl"><span class="tm">${tm}${isS?' <span class="sharptag">← sharp side</span>':''}</span><span class="pct">${tk}% tix · ${mn}% $</span></div><div class="dualbar"><div class="tk" style="width:${tk/2}%"></div><div class="hd" style="width:${mn/2}%"></div></div></div>`;});
     let why=`<b>${sg.side}</b>: ${sg.money}% money vs ${sg.tickets}% tickets (gap ${sg.gap>0?'+':''}${sg.gap}).`;
     let tags='';
-    if(sg.contrarian)tags+=`<span class="ctag good">◆ contrarian — sharp money on the unpopular side</span>`;
+    if(sg.contrarian)tags+=`<span class="ctag good">◆ contrarian: sharp money on the unpopular side</span>`;
     else tags+=`<span class="ctag meh">money follows the public (weaker)</span>`;
-    if(sg.steam)tags+=`<span class="ctag good">⚡ steam — market moved this way</span>`;
-    if(sg.capped)tags+=`<span class="ctag meh">capped at B — thin/early market</span>`;
+    if(sg.steam)tags+=`<span class="ctag good">⚡ steam: market moved this way</span>`;
+    if(sg.capped)tags+=`<span class="ctag meh">capped at B (thin/early market)</span>`;
     sharpHtml=`<div class="sharpbox"><div class="sh-h"><span class="ttl">Sharp grade · <b style="color:${GRADE_COLOR[sg.grade]}">${sg.grade}</b></span><span class="src2">Action Network</span></div>${rows}<div class="barkey"><span><i style="background:var(--tick)"></i>tickets (public)</span><span><i style="background:var(--hand)"></i>money (sharp)</span></div><div class="sh-read">${why}</div><div class="ctags">${tags}</div></div>`;
   } else sharpHtml=`<div class="nodata">No sharp-money data (US team sports only).</div>`;
   let note='';
-  if(c.has_value&&v){const pt=v.point!=null?` ${(+v.point>0?'+':'')+v.point}`:'';const ml=v.mkt==='SPR'?(c.spread_label||'spread'):(v.mkt==='TOT'?'total':'ML');note=`<div class="note"><b class="g">✓ Value:</b> ${ml} ${v.side}${pt} at ${amStr(v.price)} beats fair value. ${sg&&v.side===sg.side?`<b class="gold">+ sharp ${sg.grade} agrees — double-down spot.</b>`:(sg?`Sharp leans ${sg.side} (${sg.grade}).`:'')}</div>`;}
-  else if(sg&&sg.grade!=='D')note=`<div class="note">Sharp money grades <b style="color:${GRADE_COLOR[sg.grade]}">${sg.grade}</b> on ${sg.side}. No price value on Bovada — a sharp lean, not a value bet.</div>`;
+  if(c.has_value&&v){const pt=v.point!=null?` ${(+v.point>0?'+':'')+v.point}`:'';const ml=v.mkt==='SPR'?(c.spread_label||'spread'):(v.mkt==='TOT'?'total':'ML');note=`<div class="note"><b class="g">✓ Value:</b> ${ml} ${v.side}${pt} at ${amStr(v.price)} beats fair value. ${sg&&v.side===sg.side?`<b class="gold">+ sharp ${sg.grade} agrees: double-down spot.</b>`:(sg?`Sharp leans ${sg.side} (${sg.grade}).`:'')}</div>`;}
+  else if(sg&&sg.grade!=='D')note=`<div class="note">Sharp money grades <b style="color:${GRADE_COLOR[sg.grade]}">${sg.grade}</b> on ${sg.side}. No price value on Bovada, a sharp lean, not a value bet.</div>`;
   else if(sg)note=`<div class="note">Weak/noise-level signal (D). Not a real edge. <b>Pass.</b></div>`;
   else note=`<div class="note">No value, no sharp signal. <b>Pass.</b></div>`;
   const addable=c.has_value&&v;
@@ -591,7 +622,7 @@ const now=new Date();
 document.getElementById('clock').innerHTML=now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+'<br><span class="lv">● live feed</span>';
 const anySharp=Object.values(ALL).flat().some(c=>c.sharp_grade);
 document.getElementById('srcrow').innerHTML=[{n:'soft books',on:true},{n:'Bovada',on:true},{n:'sharp grade',on:anySharp},{n:'value scan',on:true}].map(s=>`<span class="src">${s.n} <span class="${s.on?'on':'off'}">${s.on?'●':'○'}</span></span>`).join('');
-// TOP PLAYS — all S/A grades + double-downs, each with a specific market recommendation
+// TOP PLAYS: all S/A grades + double-downs, each with a specific market recommendation
 const TOP = ALL['_top']||[];
 const he=document.getElementById('hero');
 function recLine(t){
@@ -624,7 +655,7 @@ function recLine(t){
   if(!host) return;
   let panel=document.createElement('div'); panel.className='trackbar';
   if(tr.n===0){
-    panel.innerHTML=`<span class="tk-l">Bet tracker</span><span class="tk-v">No settled bets yet — your record builds automatically as games finish.</span>`;
+    panel.innerHTML=`<span class="tk-l">Bet tracker</span><span class="tk-v">No settled bets yet. Your record builds automatically as games finish.</span>`;
   } else {
     const ud=ALL['_unit_dollars']||10;
     const dollars=Math.round(tr.units_pl*ud);
@@ -634,7 +665,7 @@ function recLine(t){
       if(p.ready) prog=`<span class="tk-ready">✓ Ready for $${p.to}/unit (want ~$${p.bankroll_need} bankroll)</span>`;
       else prog=`<span class="tk-prog">→ $${p.to}/u: ${p.bets_done}/${p.bets_need} bets · ${p.units_done>=0?'+':''}${p.units_done}/${p.units_need}u</span>`;
     }
-    panel.innerHTML=`<div class="tk-row"><span class="tk-l">Tracker</span><span class="tk-rec">${tr.wins}-${tr.losses} · <b class="${tr.units_pl>=0?'pos':'neg'}">${tr.units_pl>=0?'+':''}${tr.units_pl}u (${dollars>=0?'+$':'-$'}${Math.abs(dollars)})</b></span></div><div class="tk-row2">${prog}${tr.concentrated?' <span class="tk-warn">profit concentrated in 1 hit — small sample</span>':''}${tr.pending?' <span class="tk-pend">'+tr.pending+' pending</span>':''}</div>`;
+    panel.innerHTML=`<div class="tk-row"><span class="tk-l">Tracker</span><span class="tk-rec">${tr.wins}-${tr.losses} · <b class="${tr.units_pl>=0?'pos':'neg'}">${tr.units_pl>=0?'+':''}${tr.units_pl}u (${dollars>=0?'+$':'-$'}${Math.abs(dollars)})</b></span></div><div class="tk-row2">${prog}${tr.concentrated?' <span class="tk-warn">profit concentrated in 1 hit (small sample)</span>':''}${tr.pending?' <span class="tk-pend">'+tr.pending+' pending</span>':''}</div>`;
   }
   host.parentNode.insertBefore(panel, host.nextSibling);
 })();
@@ -667,6 +698,90 @@ function buildSportView(key,label,active){
 }
 buildSportView('mlb','MLB',true);
 SPORTS.filter(s=>!s.live).forEach(s=>{const v=mkView(s.key,false);v.innerHTML=`<div class="empty"><div class="ic">◍</div><h3>${s.label} is out of season</h3><p>Lights up around <b>${s.ret}</b>. Full sharp grades + value scan when it's live.</p></div>`;viewsEl.appendChild(v);});
+
+// ===== view toggle: Board <-> Results =====
+let _resultsBuilt=false;
+function showView(which){
+  const board=document.getElementById('view-board'), results=document.getElementById('view-results');
+  const tb=document.getElementById('vtab-board'), tr=document.getElementById('vtab-results');
+  if(which==='results'){
+    board.style.display='none'; results.style.display='block';
+    tb.classList.remove('active'); tr.classList.add('active');
+    if(!_resultsBuilt){ renderResults(); _resultsBuilt=true; }
+    window.scrollTo(0,0);
+  } else {
+    results.style.display='none'; board.style.display='block';
+    tr.classList.remove('active'); tb.classList.add('active');
+    window.scrollTo(0,0);
+  }
+}
+
+// ===== Results view (folded-in stats) =====
+function renderResults(){
+  const S=ALL['_stats']||{}; const ud=S.unit_dollars||ALL['_unit_dollars']||10;
+  const host=document.getElementById('view-results');
+  const o=S.overall||{n:0};
+  const money=(u)=>{const d=Math.round(u*ud);return (u>=0?'+':'')+u+'u ('+(d>=0?'+$':'-$')+Math.abs(d)+')';};
+  const cls=(u)=>u>=0?'pos':'neg';
+  if(!o.n){
+    host.innerHTML=`<div class="rempty"><h3>No settled bets yet</h3><p>Your results build automatically as recommended games finish. Check back after a few slates.</p></div>
+    <div class="rsect">Raw data</div><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div>
+    <div class="rnote">bets.csv = every recommended play and its result. snapshots.csv = each run's readings, for edge-over-time analysis.</div>`;
+    return;
+  }
+  let h=`<div class="rbig">
+    <div class="rstat"><div class="l">Record</div><div class="v">${o.wins}-${o.losses}</div></div>
+    <div class="rstat"><div class="l">Win %</div><div class="v">${o.win_pct}%</div></div>
+    <div class="rstat"><div class="l">Units</div><div class="v ${cls(o.units_pl)}">${o.units_pl>=0?'+':''}${o.units_pl}</div></div>
+    <div class="rstat"><div class="l">ROI</div><div class="v ${cls(o.roi||0)}">${o.roi==null?'-':o.roi+'%'}</div></div>
+    <div class="rstat"><div class="l">Profit</div><div class="v ${cls(o.units_pl)}">${o.dollars>=0?'+$':'-$'}${Math.abs(o.dollars)}</div></div>
+  </div><div class="rnote">${o.pending||0} bets still pending. $${ud}/unit.</div>`;
+  // by grade
+  h+=`<div class="rsect">By sharp grade</div>`+gradeTbl(S.by_grade);
+  if(S.cumulative&&S.cumulative.length>1) h+=`<div class="rsect">Cumulative units</div><div class="rcard">${lineChart(S.cumulative,ud)}</div>`;
+  h+=`<div class="rsect">Units won by grade</div><div class="rcard">${gradeBars(S.by_grade)}</div>`;
+  h+=`<div class="rsect">By unit size</div>`+simpleTbl(S.by_units);
+  h+=`<div class="rsect">By signal type</div>`+simpleTbl(S.by_signal);
+  h+=`<div class="rsect">By price range</div>`+simpleTbl(S.by_price);
+  h+=`<div class="rsect">By market</div>`+simpleTbl(S.by_market);
+  h+=`<div class="rsect">By time until game</div>`+simpleTbl(S.by_htg);
+  if(S.edge_by_htg&&Object.keys(S.edge_by_htg).length){
+    let rows=Object.entries(S.edge_by_htg).map(([k,v])=>`<tr><td>${k}</td><td class="g">${v} pts</td></tr>`).join('');
+    h+=`<div class="rsect">Avg sharp gap by time-to-game</div><div class="rcard"><table class="rtable"><tr><th>Hours out</th><th>Avg gap</th></tr>${rows}</table><div class="rnote">Bigger gaps closer to game time = sharp money arriving late (bet later). Bigger early = bet early. Needs a couple weeks of data to trust.</div></div>`;
+  }
+  h+=`<div class="rsect">Raw data</div><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div><div class="rnote">Every bet and snapshot, for your own sorting.</div>`;
+  host.innerHTML=h;
+
+  function badge(g){return `<td class="g" style="color:${GC[g]||'#888'}">${g}</td>`;}
+  function gradeTbl(d){
+    if(!d)return '<div class="rcard thin2">Not enough graded bets yet.</div>';
+    let rows='';
+    ['S','A','B','C','D'].forEach(g=>{const r=d[g];if(!r)return;const thin=r.n<8?'<span class="thin2"> small</span>':'';
+      rows+=`<tr>${badge(g)}<td>${r.n}${thin}</td><td>${r.win_pct==null?'-':r.win_pct+'%'}</td><td class="${cls(r.units_pl)}">${r.units_pl>=0?'+':''}${r.units_pl}u</td><td class="${cls(r.roi||0)}">${r.roi==null?'-':r.roi+'%'}</td><td class="${cls(r.dollars)}">${r.dollars>=0?'+$':'-$'}${Math.abs(r.dollars)}</td></tr>`;});
+    if(!rows)return '<div class="rcard thin2">Not enough graded bets yet.</div>';
+    return `<table class="rtable"><tr><th>Grade</th><th>Bets</th><th>Win%</th><th>Units</th><th>ROI</th><th>$</th></tr>${rows}</table><div class="rnote">"small" = under 8 bets, don't over-read it. You want ROI to rank S ≥ A ≥ B; if it's scrambled, the grading needs tuning.</div>`;
+  }
+  function simpleTbl(d){
+    if(!d||!Object.keys(d).length)return '<div class="rcard thin2">No data yet.</div>';
+    let rows=Object.entries(d).map(([k,r])=>{const thin=r.n<8?'<span class="thin2"> sm</span>':'';
+      return `<tr><td>${k}</td><td>${r.n}${thin}</td><td>${r.win_pct==null?'-':r.win_pct+'%'}</td><td class="${cls(r.units_pl)}">${r.units_pl>=0?'+':''}${r.units_pl}u</td><td class="${cls(r.roi||0)}">${r.roi==null?'-':r.roi+'%'}</td></tr>`;}).join('');
+    return `<table class="rtable"><tr><th></th><th>Bets</th><th>Win%</th><th>Units</th><th>ROI</th></tr>${rows}</table>`;
+  }
+  function gradeBars(d){
+    const vals=['S','A','B','C','D'].map(g=>d&&d[g]?d[g].units_pl:0);
+    const max=Math.max(1,...vals.map(Math.abs));let bars='';
+    ['S','A','B','C','D'].forEach((g,i)=>{const v=vals[i];const w=Math.abs(v)/max*100;
+      bars+=`<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><span style="width:16px;font-family:var(--mono);font-weight:800;color:${GC[g]}">${g}</span><div style="flex:1;background:#0a0d12;border-radius:5px;overflow:hidden"><div class="rbar" style="width:${Math.max(w,7)}%;background:${v>=0?GC[g]:'#f87171'}">${v>=0?'+':''}${v}u</div></div></div>`;});
+    return bars;
+  }
+  function lineChart(pairs,ud){
+    const W=680,H=150,pad=22;const vals=pairs.map(p=>p[1]);const mn=Math.min(0,...vals),mx=Math.max(0,...vals);const rng=(mx-mn)||1;
+    const pts=pairs.map((p,i)=>{const x=pad+i/(pairs.length-1||1)*(W-2*pad);const y=H-pad-((p[1]-mn)/rng)*(H-2*pad);return [x,y];});
+    const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    const zeroY=H-pad-((0-mn)/rng)*(H-2*pad);const last=vals[vals.length-1];
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="#232b36" stroke-dasharray="3 3"/><path d="${path}" fill="none" stroke="${last>=0?'#34d399':'#f87171'}" stroke-width="2.5"/><circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="4" fill="${last>=0?'#34d399':'#f87171'}"/><text x="${pad}" y="12" fill="#5c6673" font-size="11" font-family="monospace">${mx>=0?'+':''}${mx}u</text><text x="${pad}" y="${H-3}" fill="#5c6673" font-size="11" font-family="monospace">${mn}u</text></svg>`;
+  }
+}
 
 
 
@@ -720,7 +835,7 @@ def suggest_units(card):
     sharp_agrees = bool(sg and v and str(sg.get('side'))==str(v.get('side')) and sg.get('grade') in ('A','S'))
     grade = sg.get('grade') if sg else None
     longshot = (price is not None and price > 250)
-    # 2u — rare back-up-the-truck: strong value + sharp agrees + not a longshot
+    # 2u: rare back-up-the-truck: strong value + sharp agrees + not a longshot
     if has_value and ev is not None and ev >= 0.08 and sharp_agrees and price is not None and price <= 200:
         return (2.0, "Strong value + sharp agree, fair price")
     # 1.5u
@@ -728,11 +843,11 @@ def suggest_units(card):
         return (1.5, "Solid value, sharp confirms" if sharp_agrees else "Solid value edge")
     if (not has_value) and grade=='S' and sg.get('contrarian') and sg.get('steam') and not longshot:
         return (1.5, "Elite sharp signal (no price edge, so not 2u)")
-    # 1u — any single real signal, or anything long-priced
+    # 1u: any single real signal, or anything long-priced
     if has_value:
-        return (1.0, "Value but longshot — capped 1u" if longshot else "Value present")
+        return (1.0, "Value but longshot, capped 1u" if longshot else "Value present")
     if grade in ('S','A','B'):
-        return (1.0, "Sharp lean, longshot — price is the reward" if longshot else "Single sharp signal")
+        return (1.0, "Sharp lean, longshot: price is the reward" if longshot else "Single sharp signal")
     return (None, None)  # C/D no value = skip
 
 def build_recommendation(c, sg):
@@ -749,7 +864,7 @@ def build_recommendation(c, sg):
         if agree and v['mkt']!='ML': cross=f" (sharp money backs {sg['side']} to win; this {mlabel.lower()} is the value angle on the same side)"
         return {'type':'value','market':mlabel,'side':str(v['side']),'point':v.get('point'),'price':v['price'],
                 'text':f"{mlabel} · {sidetxt} at {am_str(v['price'])}",
-                'why':("Value + sharp agree — double-down." if agree else "Value bet (price beats fair value).")+cross,
+                'why':("Value + sharp agree: double-down." if agree else "Value bet (price beats fair value).")+cross,
                 'double':bool(agree)}
     if sg and sg['grade'] in ('S','A','B','C'):
         ml=find_play('ML',sg['side']); sp=find_play('SPR',sg['side']); alts=[]
@@ -759,7 +874,7 @@ def build_recommendation(c, sg):
             p0=alts[0]; pt=pt_str(p0['point']); sidetxt=f"{sg['side']} {pt}".strip()
             return {'type':'sharp','market':p0['market'],'side':sg['side'],'point':p0['point'],'price':p0['price'],
                     'text':f"{p0['market']} · {sidetxt} at {am_str(p0['price'])}",
-                    'why':"Sharp signal is moneyline-based — the ML is the cleanest expression. Alt markets shown if you want a different risk/reward.",
+                    'why':"Sharp signal is moneyline-based, so the ML is the cleanest expression. Alt markets shown if you want a different risk/reward.",
                     'alts':alts,'double':False}
     return None
 
@@ -953,128 +1068,12 @@ def compute_stats(log_path, snap_path, unit_dollars):
             'edge_by_htg':edge_time,
             'unit_dollars':unit_dollars}
 
-# ============================ STATS PAGE ============================
-def build_stats_page(stats, unit_dollars):
-    import json as _j
-    data=_j.dumps(stats, default=str)
-    return r'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>EdgeFinder · Stats</title>
-<style>
-:root{--bg:#0a0d12;--card:#131820;--card2:#1a212b;--line:#232b36;--txt:#e8edf3;--mut:#8b97a6;--dim:#5c6673;
---sharp:#34d399;--public:#f87171;--gold:#f5c451;--blue:#60a5fa;--mono:'SF Mono',ui-monospace,Menlo,monospace}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:18px;max-width:760px;margin:0 auto;padding-bottom:60px}
-a{color:var(--blue);text-decoration:none}
-.top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
-h1{font-size:26px;font-weight:800}h1 span{color:var(--sharp)}
-.sub{color:var(--mut);font-size:13px;margin-bottom:18px}
-.big{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;flex:1;min-width:120px}
-.stat .l{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--dim);font-weight:700}
-.stat .v{font-size:24px;font-weight:800;font-family:var(--mono);margin-top:3px}
-.pos{color:var(--sharp)}.neg{color:var(--public)}
-.sect{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--mut);margin:22px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--line)}
-th:first-child,td:first-child{text-align:left}
-th{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);font-weight:700}
-td.g{font-family:var(--mono);font-weight:800}
-.gS{color:var(--gold)}.gA{color:var(--sharp)}.gB{color:var(--blue)}.gC{color:var(--mut)}.gD{color:var(--dim)}
-.bar{height:22px;border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-family:var(--mono);font-weight:700;color:#0a0d12;min-width:30px}
-.thin{color:var(--dim);font-size:11px;font-style:italic}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
-.dl{display:flex;gap:10px;margin:14px 0;flex-wrap:wrap}
-.dl a{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600}
-.note{color:var(--mut);font-size:12px;line-height:1.5;margin-top:6px}
-.empty{text-align:center;color:var(--mut);padding:40px 20px}
-svg{display:block;width:100%;overflow:visible}
-</style></head><body>
-<div class="top"><h1>edge<span>finder</span> stats</h1><a href="index.html">← board</a></div>
-<div class="sub" id="sub"></div>
-<div id="app"></div>
-<script>const S=''' + data + r''';</script>
-<script>
-const ud=S.unit_dollars||10;
-const app=document.getElementById('app');
-const o=S.overall||{n:0};
-document.getElementById('sub').textContent = o.n>0 ? `${o.n} settled bets · ${o.pending||0} pending · $${ud}/unit` : 'No settled bets yet';
-function money(u){const d=Math.round(u*ud);return (u>=0?'+':'')+u+'u ('+(d>=0?'+$':'-$')+Math.abs(d)+')';}
-function cls(u){return u>=0?'pos':'neg';}
-if(!o.n){app.innerHTML=`<div class="empty"><h3>No settled bets yet</h3><p>Your stats build automatically as recommended games finish. Check back after a few slates.</p></div>`;}
-else{
-  // big numbers
-  app.innerHTML=`<div class="big">
-    <div class="stat"><div class="l">Record</div><div class="v">${o.wins}-${o.losses}</div></div>
-    <div class="stat"><div class="l">Win %</div><div class="v">${o.win_pct}%</div></div>
-    <div class="stat"><div class="l">Units</div><div class="v ${cls(o.units_pl)}">${o.units_pl>=0?'+':''}${o.units_pl}</div></div>
-    <div class="stat"><div class="l">ROI</div><div class="v ${cls(o.roi||0)}">${o.roi==null?'—':o.roi+'%'}</div></div>
-    <div class="stat"><div class="l">Profit</div><div class="v ${cls(o.units_pl)}">${o.dollars>=0?'+$':'-$'}${Math.abs(o.dollars)}</div></div>
-  </div>`;
-  // by grade — the headline breakdown
-  app.innerHTML+=`<div class="sect">By sharp grade</div>`+gradeTable(S.by_grade,['S','A','B','C','D']);
-  // cumulative chart
-  if(S.cumulative && S.cumulative.length>1) app.innerHTML+=`<div class="sect">Cumulative units</div><div class="card">${lineChart(S.cumulative)}</div>`;
-  // units won by grade bar chart
-  app.innerHTML+=`<div class="sect">Units won by grade</div><div class="card">${barChart(S.by_grade,['S','A','B','C','D'])}</div>`;
-  // other breakdowns
-  app.innerHTML+=`<div class="sect">By unit size</div>`+simpleTable(S.by_units);
-  app.innerHTML+=`<div class="sect">By signal type</div>`+simpleTable(S.by_signal);
-  app.innerHTML+=`<div class="sect">By price range</div>`+simpleTable(S.by_price);
-  app.innerHTML+=`<div class="sect">By market</div>`+simpleTable(S.by_market);
-  app.innerHTML+=`<div class="sect">By time until game (when bet placed)</div>`+simpleTable(S.by_htg);
-  // edge over time
-  if(S.edge_by_htg && Object.keys(S.edge_by_htg).length){
-    let rows=Object.entries(S.edge_by_htg).map(([k,v])=>`<tr><td>${k}</td><td class="g">${v} pts</td></tr>`).join('');
-    app.innerHTML+=`<div class="sect">Avg sharp gap by time-to-game (all snapshots)</div><div class="card"><table><tr><th>Hours out</th><th>Avg gap</th></tr>${rows}</table><div class="note">If gaps are bigger closer to game time, sharp money is arriving late — bet later. If bigger early, bet early. Needs a couple weeks of snapshots to trust.</div></div>`;
-  }
-}
-// downloads
-app.innerHTML+=`<div class="sect">Raw data</div><div class="dl"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div><div class="note">Every bet and every snapshot, for your own sorting. bets.csv = graded results. snapshots.csv = each run's readings for edge-over-time.</div>`;
-
-function badge(g){return `<td class="g g${g}">${g}</td>`;}
-function gradeTable(d,order){
-  if(!d)return '';
-  let rows='';
-  order.forEach(g=>{const r=d[g];if(!r)return;
-    const thin=r.n<8?'<span class="thin"> small</span>':'';
-    rows+=`<tr>${badge(g)}<td>${r.n}${thin}</td><td>${r.win_pct==null?'—':r.win_pct+'%'}</td><td class="${cls(r.units_pl)}">${r.units_pl>=0?'+':''}${r.units_pl}u</td><td class="${cls(r.roi||0)}">${r.roi==null?'—':r.roi+'%'}</td><td class="${cls(r.dollars)}">${r.dollars>=0?'+$':'-$'}${Math.abs(r.dollars)}</td></tr>`;});
-  if(!rows)return '<div class="thin card">Not enough graded bets yet.</div>';
-  return `<table><tr><th>Grade</th><th>Bets</th><th>Win%</th><th>Units</th><th>ROI</th><th>$</th></tr>${rows}</table><div class="note">Small = under 8 bets, don't read too much into it yet. You want S ≥ A ≥ B in ROI; if they're scrambled, the grading needs tuning.</div>`;
-}
-function simpleTable(d){
-  if(!d||!Object.keys(d).length)return '<div class="thin card">No data yet.</div>';
-  let rows=Object.entries(d).map(([k,r])=>{const thin=r.n<8?'<span class="thin"> small</span>':'';
-    return `<tr><td>${k}</td><td>${r.n}${thin}</td><td>${r.win_pct==null?'—':r.win_pct+'%'}</td><td class="${cls(r.units_pl)}">${r.units_pl>=0?'+':''}${r.units_pl}u</td><td class="${cls(r.roi||0)}">${r.roi==null?'—':r.roi+'%'}</td></tr>`;}).join('');
-  return `<table><tr><th></th><th>Bets</th><th>Win%</th><th>Units</th><th>ROI</th></tr>${rows}</table>`;
-}
-function barChart(d,order){
-  const GC={S:'#f5c451',A:'#34d399',B:'#60a5fa',C:'#8b97a6',D:'#5c6673'};
-  const vals=order.map(g=>d&&d[g]?d[g].units_pl:0);
-  const max=Math.max(1,...vals.map(Math.abs));
-  let bars='';
-  order.forEach((g,i)=>{const v=vals[i];const w=Math.abs(v)/max*100;
-    bars+=`<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><span style="width:18px;font-family:var(--mono);font-weight:800;color:${GC[g]}">${g}</span><div style="flex:1;background:#0a0d12;border-radius:5px;overflow:hidden"><div class="bar" style="width:${Math.max(w,8)}%;background:${v>=0?GC[g]:'#f87171'}">${v>=0?'+':''}${v}u</div></div></div>`;});
-  return bars;
-}
-function lineChart(pairs){
-  const W=680,H=160,pad=24;
-  const vals=pairs.map(p=>p[1]);const min=Math.min(0,...vals),max=Math.max(0,...vals);
-  const rng=(max-min)||1;
-  const pts=pairs.map((p,i)=>{const x=pad+i/(pairs.length-1||1)*(W-2*pad);const y=H-pad-((p[1]-min)/rng)*(H-2*pad);return [x,y];});
-  const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-  const zeroY=H-pad-((0-min)/rng)*(H-2*pad);
-  const last=vals[vals.length-1];
-  return `<svg viewBox="0 0 ${W} ${H}"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="#232b36" stroke-dasharray="3 3"/><path d="${path}" fill="none" stroke="${last>=0?'#34d399':'#f87171'}" stroke-width="2.5"/><circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="4" fill="${last>=0?'#34d399':'#f87171'}"/><text x="${pad}" y="14" fill="#5c6673" font-size="11" font-family="monospace">${max>=0?'+':''}${max}u</text><text x="${pad}" y="${H-4}" fill="#5c6673" font-size="11" font-family="monospace">${min}u</text></svg>`;
-}
-</script></body></html>'''
-
 # ============================ MAIN ============================
 def main():
     here=os.path.dirname(os.path.abspath(__file__))
     hist=os.path.join(here, HISTORY_FOLDER)
     os.makedirs(hist, exist_ok=True)   # create history folder if missing
-    print("EdgeFinder — fetching fresh data...")
+    print("EdgeFinder: fetching fresh data...")
     print(f"  (python {sys.version.split()[0]} · {ssl.OPENSSL_VERSION})\n")
     allc={}
     raw_payloads=[]
@@ -1145,7 +1144,7 @@ def main():
     allc['_stats']=stats
     allc['_unit_dollars']=UNIT_DOLLARS
 
-    # 5. CSV exports (for manual sorting) — written to docs/ when on GitHub, else here
+    # 5. CSV exports (for manual sorting), written to docs/ when on GitHub, else here
     csv_dir = os.path.join(here,"docs") if CI else here
     os.makedirs(csv_dir, exist_ok=True)
     betlog=load_log(log_path)
@@ -1164,15 +1163,11 @@ def main():
     with open(archive,'w',encoding='utf-8') as f: f.write(html)
     latest=os.path.join(here,"edgefinder_latest.html")
     with open(latest,'w',encoding='utf-8') as f: f.write(html)
-    # stats page
-    stats_html = build_stats_page(stats, UNIT_DOLLARS)
-    with open(os.path.join(here,"edgefinder_stats.html"),'w',encoding='utf-8') as f: f.write(stats_html)
     # When running on GitHub, also publish to docs/ (served by GitHub Pages)
     if CI:
         docs=os.path.join(here,"docs")
         os.makedirs(docs, exist_ok=True)
         with open(os.path.join(docs,"index.html"),'w',encoding='utf-8') as f: f.write(html)
-        with open(os.path.join(docs,"stats.html"),'w',encoding='utf-8') as f: f.write(stats_html)
 
     n_top=len(top)
     print(f"\nDone. {n_top} play(s) worth attention today.")
@@ -1184,7 +1179,7 @@ def main():
         if p:
             if p['ready']: print(f"  >> You've hit the bar to move to ${p['to']}/unit. (Check bankroll: want ~${p['bankroll_need']}+ behind it.)")
             else: print(f"  Toward ${p['to']}/unit: {p['bets_done']}/{p['bets_need']} bets, {p['units_done']:+.1f}/{p['units_need']}u")
-            if s['concentrated']: print(f"  (Heads up: profit is concentrated in one big hit — keep going before trusting it.)")
+            if s['concentrated']: print(f"  (Heads up: profit is concentrated in one big hit, so keep going before trusting it.)")
     print(f"Saved: {archive}")
     if not CI:
         print(f"Opening dashboard...")
@@ -1202,9 +1197,9 @@ if __name__=='__main__':
             print("  1. Antivirus/security software is scanning HTTPS traffic and blocking Python.")
             print("     -> In your AV settings, turn off 'HTTPS scanning' / 'SSL scanning' / 'web shield',")
             print("        or add Python to its exceptions. (Avast, AVG, ESET, Kaspersky, Bitdefender all do this.)")
-            print("  2. Your Python is old. Check the version printed at the top — if OpenSSL is older than")
+            print("  2. Your Python is old. Check the version printed at the top. If OpenSSL is older than")
             print("     3.0, install the latest Python from python.org (check 'Add to PATH') and try again.")
-            print("  3. A VPN or work network is filtering traffic — try on your home Wi-Fi with VPN off.")
+            print("  3. A VPN or work network is filtering traffic. Try on your home Wi-Fi with VPN off.")
             print("  Quick test: run  pip install certifi  then run this again (the script will use it).")
         else:
             print("If this keeps happening, check your internet connection or that your Odds API key is still valid.")
