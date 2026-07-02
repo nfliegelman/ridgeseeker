@@ -1,16 +1,21 @@
 name: EdgeFinder
 
-# Two ways this runs:
-#  1. You press the "Run workflow" button (manual) — this is your "refresh" button.
-#  2. Optionally on a schedule (the cron line below is commented out by default).
+# Runs 3x a day (captures early lines -> afternoon movement -> near game time),
+# and you can also press "Run workflow" anytime for a fresh pull.
 on:
   workflow_dispatch:        # the manual "Run workflow" button
-  # schedule:
-  #   - cron: '0 19 * * 4,5,6'   # OPTIONAL: auto-run Thu/Fri/Sat at 19:00 UTC (~2pm Central). Uncomment to enable.
+  schedule:
+    # Times are UTC. These are 10am / 2pm / 6pm Central (CDT).
+    - cron: '0 15 * * *'    # ~10am CT - morning, early lines
+    - cron: '0 19 * * *'    # ~2pm CT  - afternoon movement
+    - cron: '0 23 * * *'    # ~6pm CT  - evening, near close for night games
 
-# Let the workflow write the dashboard + betlog back into the repo.
 permissions:
   contents: write
+
+concurrency:
+  group: edgefinder-run
+  cancel-in-progress: false
 
 jobs:
   run-edgefinder:
@@ -29,14 +34,15 @@ jobs:
 
       - name: Run EdgeFinder
         env:
-          ODDS_KEY: ${{ secrets.ODDS_KEY }}   # your API key, stored as a GitHub secret
+          ODDS_KEY: ${{ secrets.ODDS_KEY }}
         run: python edgefinder.py
 
-      - name: Publish dashboard + save bet log
+      - name: Publish dashboard, stats, logs + CSVs
         run: |
           git config user.name  "edgefinder-bot"
           git config user.email "edgefinder-bot@users.noreply.github.com"
-          git add docs/index.html edgefinder_betlog.json edgefinder_history/ 2>/dev/null || true
+          git pull --rebase --autostash || true
+          git add docs/ edgefinder_betlog.json edgefinder_snapshots.json edgefinder_history/ 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else
