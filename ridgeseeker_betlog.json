@@ -12,7 +12,7 @@
       "date": "2026-06-30",
       "result": null,
       "units_pl": null,
-      "close_price": 174
+      "close_price": 190
     },
     {
       "away": "Chicago White Sox",
@@ -75,8 +75,8 @@
       "clv": null,
       "hours_to_game": 0.56,
       "date": "2026-07-02",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.12
     }
   ]
 }

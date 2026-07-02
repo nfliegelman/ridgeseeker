@@ -5,3 +5,6 @@ run_ts,sport,game,commence,hours_to_game,sharp_side,grade,gap,tickets,money,cont
 2026-07-02T16:02:35.516774+00:00,mlb,Detroit Tigers @ Texas Rangers,2026-07-03T00:06:00Z,8.06,Detroit Tigers,B,19,39,58,False,True,False,-101,Moneyline,1.0
 2026-07-02T16:02:35.516774+00:00,mlb,Los Angeles Angels @ Seattle Mariners,2026-07-03T01:41:00Z,9.64,Los Angeles Angels,C,9,13,22,True,False,False,174,Moneyline,
 2026-07-02T16:02:35.516774+00:00,mlb,San Diego Padres @ Los Angeles Dodgers,2026-07-03T02:11:00Z,10.14,San Diego Padres,B,15,12,27,True,False,False,161,Moneyline,1.0
+2026-07-02T22:36:19.115861+00:00,mlb,St. Louis Cardinals @ Atlanta Braves,2026-07-02T23:16:00Z,0.66,Atlanta Braves,D,11,71,82,False,True,False,,,
+2026-07-02T22:36:19.115861+00:00,mlb,Tampa Bay Rays @ Kansas City Royals,2026-07-02T23:41:00Z,1.08,Tampa Bay Rays,D,6,84,90,False,True,False,,,
+2026-07-02T22:36:19.115861+00:00,mlb,Detroit Tigers @ Texas Rangers,2026-07-03T00:06:00Z,1.49,Detroit Tigers,C,12,42,54,False,True,False,-111,Moneyline,
