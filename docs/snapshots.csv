@@ -9,3 +9,8 @@ run_ts,sport,game,commence,hours_to_game,sharp_side,grade,gap,tickets,money,cont
 2026-07-02T22:36:19.115861+00:00,mlb,Tampa Bay Rays @ Kansas City Royals,2026-07-02T23:41:00Z,1.08,Tampa Bay Rays,D,6,84,90,False,True,False,,,,,,,,
 2026-07-02T22:36:19.115861+00:00,mlb,Detroit Tigers @ Texas Rangers,2026-07-03T00:06:00Z,1.49,Detroit Tigers,C,12,42,54,False,True,False,-111,Moneyline,,,,,,
 2026-07-03T06:33:28.153449+00:00,mlb,San Diego Padres @ Los Angeles Dodgers,2026-07-04T02:11:00Z,19.63,San Diego Padres,D,6,10,16,True,True,False,,,,,,,0341580e2426c65b63d7fb929214eb65,
+2026-07-03T16:40:12.636761+00:00,mlb,San Francisco Giants @ Colorado Rockies,2026-07-04T00:10:00Z,7.5,Colorado Rockies,C,12,29,41,True,False,False,126,Moneyline,Colorado Rockies,,,,3bf177f10d546535921fa6be841880f7,
+2026-07-03T16:40:12.636761+00:00,mlb,Tampa Bay Rays @ Houston Astros,2026-07-04T00:15:00Z,7.58,Tampa Bay Rays,D,6,71,77,False,True,False,,,,,,,f0e24a50674443856bff31b645ff5572,
+2026-07-03T16:40:12.636761+00:00,mlb,Miami Marlins @ Athletics,2026-07-04T01:40:00Z,9.0,Miami Marlins,A,25,44,69,False,True,False,119,Moneyline,Miami Marlins,,,,5434f34b7e8232a7091f0e3efdd4a175,1.0
+2026-07-03T16:40:12.636761+00:00,mlb,San Diego Padres @ Los Angeles Dodgers,2026-07-04T02:10:00Z,9.5,San Diego Padres,C,11,6,17,True,True,False,205,Moneyline,San Diego Padres,,,,0341580e2426c65b63d7fb929214eb65,
+2026-07-03T16:40:12.636761+00:00,mlb,Toronto Blue Jays @ Seattle Mariners,2026-07-04T02:10:00Z,9.5,Toronto Blue Jays,D,6,59,65,False,True,False,,,,,,,90671747520f496e2e8e3b667c7c4286,

@@ -4,3 +4,4 @@ date,commence,sport,away,home,market,side,point,price,units,grade,gap,contrarian
 2026-06-30,,MLB,New York Mets,Toronto Blue Jays,Moneyline,New York Mets,,-102,1.0,,,,,,,,,,,,,win,0.98,,
 2026-06-30,,MLB,San Diego Padres,Chicago Cubs,Moneyline,San Diego Padres,,128,1.0,,,,,,,,,,,,,loss,-1.0,,
 2026-07-02,,MLB,Pittsburgh Pirates,Philadelphia Phillies,Moneyline,Pittsburgh Pirates,,112,1.0,A,24,True,True,False,,,,,,,0.56,win,1.12,2026-07-02.v9-ridgeseeker,
+2026-07-03,2026-07-04T01:40:00Z,MLB,Miami Marlins,Athletics,Moneyline,Miami Marlins,,119,1.0,A,25,False,True,False,,,,,,,9.0,,,2026-07-02.v10-audit1,5434f34b7e8232a7091f0e3efdd4a175

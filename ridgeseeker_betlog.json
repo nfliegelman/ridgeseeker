@@ -78,6 +78,34 @@
       "date": "2026-07-02",
       "result": "win",
       "units_pl": 1.12
+    },
+    {
+      "away": "Miami Marlins",
+      "home": "Athletics",
+      "sport": "MLB",
+      "market": "Moneyline",
+      "side": "Miami Marlins",
+      "point": null,
+      "price": 119,
+      "units": 1.0,
+      "grade": "A",
+      "gap": 25,
+      "contrarian": false,
+      "steam": true,
+      "has_value": false,
+      "ev": null,
+      "fair": null,
+      "fair_mult": null,
+      "anchor": null,
+      "commence": "2026-07-04T01:40:00Z",
+      "event_id": "5434f34b7e8232a7091f0e3efdd4a175",
+      "model_version": "2026-07-02.v10-audit1",
+      "close_price": null,
+      "clv": null,
+      "hours_to_game": 9.0,
+      "date": "2026-07-03",
+      "result": null,
+      "units_pl": null
     }
   ]
 }
