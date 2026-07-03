@@ -14,3 +14,17 @@ run_ts,sport,game,commence,hours_to_game,sharp_side,grade,gap,tickets,money,cont
 2026-07-03T16:40:12.636761+00:00,mlb,Miami Marlins @ Athletics,2026-07-04T01:40:00Z,9.0,Miami Marlins,A,25,44,69,False,True,False,119,Moneyline,Miami Marlins,,,,5434f34b7e8232a7091f0e3efdd4a175,1.0
 2026-07-03T16:40:12.636761+00:00,mlb,San Diego Padres @ Los Angeles Dodgers,2026-07-04T02:10:00Z,9.5,San Diego Padres,C,11,6,17,True,True,False,205,Moneyline,San Diego Padres,,,,0341580e2426c65b63d7fb929214eb65,
 2026-07-03T16:40:12.636761+00:00,mlb,Toronto Blue Jays @ Seattle Mariners,2026-07-04T02:10:00Z,9.5,Toronto Blue Jays,D,6,59,65,False,True,False,,,,,,,90671747520f496e2e8e3b667c7c4286,
+2026-07-03T22:32:25.633983+00:00,mlb,Pittsburgh Pirates @ Washington Nationals,2026-07-03T22:45:00Z,0.21,Washington Nationals,D,6,77,83,False,True,False,,,,,,,14423828314cc83167d6c7ce88323746,
+2026-07-03T22:32:25.633983+00:00,mlb,Baltimore Orioles @ Cincinnati Reds,2026-07-03T23:10:00Z,0.63,Baltimore Orioles,D,8,63,71,False,True,False,,,,,,,6a7d6767bd4da0f044ab6d250c233769,
+2026-07-03T22:32:25.633983+00:00,mlb,Tampa Bay Rays @ Houston Astros,2026-07-04T00:15:00Z,1.71,Tampa Bay Rays,D,13,68,81,False,True,False,,,,,,,f0e24a50674443856bff31b645ff5572,
+2026-07-03T22:32:25.633983+00:00,mlb,Boston Red Sox @ Los Angeles Angels,2026-07-04T01:38:00Z,3.09,Boston Red Sox,D,7.2,57,64,False,False,False,,,,,,,10e96b5a6a3e81aac49e9771082a5bea,
+2026-07-03T22:32:25.633983+00:00,mlb,Miami Marlins @ Athletics,2026-07-04T01:40:00Z,3.13,Miami Marlins,B,14.3,41,56,False,False,False,119,Moneyline,Miami Marlins,,,,5434f34b7e8232a7091f0e3efdd4a175,1.0
+2026-07-03T22:32:25.633983+00:00,mlb,Milwaukee Brewers @ Arizona Diamondbacks,2026-07-04T01:45:00Z,3.21,Milwaukee Brewers,D,8.0,86,94,False,True,False,,,,,,,bb4dc431a7347100e9781696b2bcf256,
+2026-07-03T22:32:25.633983+00:00,mlb,Toronto Blue Jays @ Seattle Mariners,2026-07-04T02:10:00Z,3.63,Toronto Blue Jays,D,8.7,63,72,False,True,False,,,,,,,90671747520f496e2e8e3b667c7c4286,
+2026-07-03T22:32:25.633983+00:00,mlb,Pittsburgh Pirates @ Washington Nationals,2026-07-04T15:06:00Z,16.56,Washington Nationals,D,6,77,83,False,True,False,,,,,,,cf30692398660f7bad608a5e820b0d31,
+2026-07-03T22:32:25.633983+00:00,mlb,Toronto Blue Jays @ Seattle Mariners,2026-07-04T20:11:00Z,21.64,Toronto Blue Jays,D,8.7,63,72,False,True,False,,,,,,,984229c1b91fa0876a5f4e5c584d4387,
+2026-07-03T22:32:25.633983+00:00,mlb,Baltimore Orioles @ Cincinnati Reds,2026-07-04T23:11:00Z,24.64,Baltimore Orioles,D,8,63,71,False,True,False,,,,,,,e9d56acb32e4662dcb7e8858362e887a,
+2026-07-03T22:32:25.633983+00:00,mlb,Tampa Bay Rays @ Houston Astros,2026-07-04T23:11:00Z,24.64,Tampa Bay Rays,D,13,68,81,False,True,False,,,,,,,516860d105f26cb11a4c57a773a851f5,
+2026-07-03T22:32:25.633983+00:00,mlb,Boston Red Sox @ Los Angeles Angels,2026-07-05T01:39:00Z,27.11,Boston Red Sox,D,7.2,57,64,False,False,False,,,,,,,56eb72104fb4612dbd0953df70201727,
+2026-07-03T22:32:25.633983+00:00,mlb,Milwaukee Brewers @ Arizona Diamondbacks,2026-07-05T01:41:00Z,27.14,Milwaukee Brewers,D,8.0,86,94,False,True,False,,,,,,,a523c1ba668649088416935d2bc9a573,
+2026-07-03T22:32:25.633983+00:00,mlb,Miami Marlins @ Athletics,2026-07-05T01:41:00Z,27.14,Miami Marlins,B,14.3,41,56,False,False,False,,,,,,,33b4c5f526bcc56b10bb39d97a8b942d,
