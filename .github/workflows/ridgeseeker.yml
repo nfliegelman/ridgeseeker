@@ -1,33 +1,51 @@
 name: RidgeSeeker
+
+# Runs 2x a day (morning board + grade last night via backfill, then pre-slate board
+# near close), and you can also press "Run workflow" anytime for a fresh pull.
+# Credit math: 3 markets x 2 regions = 6 credits/run x 2 runs/day = ~360 of ~500 free monthly.
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # the manual "Run workflow" button
   schedule:
-    - cron: '0 15 * * *'
-    - cron: '30 21 * * *'
+    # Times are UTC. These are 10am / 4:30pm Central (CDT).
+    - cron: '0 15 * * *'    # ~10am CT: grades last night, morning board
+    - cron: '30 21 * * *'   # ~4:30pm CT: pre-slate board, matured sharp money, close capture
+
 permissions:
   contents: write
+
 concurrency:
-  group: ridgeseeker
+  group: ridgeseeker-run
   cancel-in-progress: false
+
 jobs:
-  run:
+  run-ridgeseeker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Install certifi
+
+      - name: Install certifi (helps with SSL)
         run: pip install --quiet certifi
+
       - name: Run RidgeSeeker
         env:
           ODDS_KEY: ${{ secrets.ODDS_KEY }}
         run: python ridgeseeker.py
-      - name: Publish dashboard + save logs
+
+      - name: Publish dashboard, stats, logs + CSVs
         run: |
           git config user.name  "ridgeseeker-bot"
           git config user.email "ridgeseeker-bot@users.noreply.github.com"
+          git pull --rebase --autostash || true
           git add docs/ ridgeseeker_betlog.json ridgeseeker_snapshots.json ridgeseeker_history/ 2>/dev/null || true
-          git diff --staged --quiet || git commit -m "RidgeSeeker run $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git pull --rebase --autostash origin main
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "RidgeSeeker run $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
