@@ -1,6 +1,6 @@
-date,sport,away,home,market,side,point,price,units,grade,gap,contrarian,steam,has_value,hours_to_game,result,units_pl
-2026-06-30,MLB,Los Angeles Angels,Seattle Mariners,Moneyline,Los Angeles Angels,,157,1.5,,,,,,,,
-2026-06-30,MLB,Chicago White Sox,Baltimore Orioles,Moneyline,Chicago White Sox,,128,1.0,,,,,,,win,1.28
-2026-06-30,MLB,New York Mets,Toronto Blue Jays,Moneyline,New York Mets,,-102,1.0,,,,,,,win,0.98
-2026-06-30,MLB,San Diego Padres,Chicago Cubs,Moneyline,San Diego Padres,,128,1.0,,,,,,,loss,-1.0
-2026-07-02,MLB,Pittsburgh Pirates,Philadelphia Phillies,Moneyline,Pittsburgh Pirates,,112,1.0,A,24,True,True,False,0.56,win,1.12
+date,commence,sport,away,home,market,side,point,price,units,grade,gap,contrarian,steam,has_value,ev,fair,fair_mult,anchor,close_price,clv,hours_to_game,result,units_pl,model_version,event_id
+2026-06-30,,MLB,Los Angeles Angels,Seattle Mariners,Moneyline,Los Angeles Angels,,157,1.5,,,,,,,,,,190,-11.38,,loss,-1.5,,
+2026-06-30,,MLB,Chicago White Sox,Baltimore Orioles,Moneyline,Chicago White Sox,,128,1.0,,,,,,,,,,,,,win,1.28,,
+2026-06-30,,MLB,New York Mets,Toronto Blue Jays,Moneyline,New York Mets,,-102,1.0,,,,,,,,,,,,,win,0.98,,
+2026-06-30,,MLB,San Diego Padres,Chicago Cubs,Moneyline,San Diego Padres,,128,1.0,,,,,,,,,,,,,loss,-1.0,,
+2026-07-02,,MLB,Pittsburgh Pirates,Philadelphia Phillies,Moneyline,Pittsburgh Pirates,,112,1.0,A,24,True,True,False,,,,,,,0.56,win,1.12,2026-07-02.v9-ridgeseeker,

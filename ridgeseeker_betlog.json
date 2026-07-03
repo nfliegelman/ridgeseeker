@@ -10,9 +10,10 @@
       "price": 157,
       "units": 1.5,
       "date": "2026-06-30",
-      "result": null,
-      "units_pl": null,
-      "close_price": 190
+      "result": "loss",
+      "units_pl": -1.5,
+      "close_price": 190,
+      "clv": -11.38
     },
     {
       "away": "Chicago White Sox",
