@@ -5,7 +5,7 @@ RidgeSeeker: Sports Edge Dashboard (formerly EdgeFinder)
 Run this and it will:
   1. Fetch fresh odds, sharp money, and live game status for all in-season sports
   2. Run the full value + sharp-grade engine
-  3. Save a timestamped copy into the "edgefinder_history" folder
+  3. Save a timestamped copy into the "ridgeseeker_history" folder
   4. Open the dashboard in your browser
 
 Run:  python ridgeseeker.py
@@ -23,9 +23,18 @@ from datetime import datetime, timezone, timedelta
 
 # ============================ CONFIG ============================
 import os
-ODDS_KEY = os.environ.get("ODDS_KEY", "82149bd2ee25ae592612b8335b553d88")   # env (GitHub secret) or fallback
+# Key comes from the ODDS_KEY env var (GitHub secret) or, for local runs, a file named
+# odds_key.txt sitting next to this script (gitignored, never committed). The key must
+# NEVER be hardcoded here: this repo is public (GitHub Pages requires it on the free
+# tier), so a hardcoded key is a stolen key.
+ODDS_KEY = os.environ.get("ODDS_KEY", "")
+if not ODDS_KEY:
+    _kf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "odds_key.txt")
+    if os.path.exists(_kf):
+        try: ODDS_KEY = open(_kf).read().strip()
+        except Exception: pass
 # Stamp every logged bet so history survives retunes and versions can be compared.
-MODEL_VERSION = "2026-07-02.v9-ridgeseeker"
+MODEL_VERSION = "2026-07-02.v10-audit1"
 HISTORY_FOLDER = "ridgeseeker_history"           # timestamped HTMLs saved here
 # Auto-detect: are we running on GitHub's servers (cloud) or on a personal laptop?
 CI = (os.environ.get("GITHUB_ACTIONS") == "true") or bool(os.environ.get("EDGEFINDER_CI"))
@@ -142,10 +151,35 @@ def am2dec(o):  o=float(o); return 1+(o/100 if o>0 else 100/(-o))
 def prob2am(p):
     if p is None or p<=0 or p>=1: return None
     return round(-100*p/(1-p)) if p>0.5 else round(100*(1-p)/p)
+def _power_k(qa, qb):
+    """Solve qa**k + qb**k = 1 by bisection (k >= 1 whenever there is vig)."""
+    lo, hi = 1.0, 3.0
+    while qa**hi + qb**hi > 1 and hi < 50: hi *= 2
+    for _ in range(60):
+        mid=(lo+hi)/2
+        if qa**mid + qb**mid > 1: lo=mid
+        else: hi=mid
+    return (lo+hi)/2
+def fair_pair(pa, pb):
+    """No-vig fair probability of side A from a two-way pair of American prices,
+    using the POWER method rather than proportional scaling. Proportional devig
+    systematically overstates the fair probability of the longer-priced side
+    (favorite-longshot bias), which inflates apparent EV on exactly the underdog
+    bets this tool prefers. Power devig removes most of that bias."""
+    qa, qb = am2prob(pa), am2prob(pb)
+    if qa<=0 or qb<=0: return None
+    if qa+qb<=1: return qa/(qa+qb)   # degenerate no-vig or negative-vig pair
+    return qa**_power_k(qa, qb)
 def novig(pairs):
-    if not pairs: return None, 0
-    ps=[am2prob(a)/(am2prob(a)+am2prob(b)) for a,b in pairs]
-    return statistics.median(ps), len(ps)
+    """Returns (fair_power_median, fair_proportional_median, n_books). The power
+    number drives decisions; the proportional number is logged alongside every play
+    so the two methods can be compared on real results later."""
+    if not pairs: return None, None, 0
+    pw=[fair_pair(a,b) for a,b in pairs]
+    pw=[p for p in pw if p is not None]
+    pm=[am2prob(a)/(am2prob(a)+am2prob(b)) for a,b in pairs]
+    if not pw: return None, (statistics.median(pm) if pm else None), 0
+    return statistics.median(pw), statistics.median(pm), len(pw)
 def novig3(triples):
     if not triples: return None, 0
     aw,hm,dr=[],[],[]
@@ -202,6 +236,22 @@ def fetch_sharp_and_status(league):
                           'num_bets':g.get('num_bets')}
     return sharp, status, raw
 
+def fetch_scores_for_dates(league, days_back=3):
+    """Fetch the Action Network scoreboard for each of the past N days (free, no auth).
+    Why: the current-day scoreboard rolls over each morning, so a night game that ends
+    after the last run of the day never appears final to this tool and its bets stay
+    pending forever (this happened to a real logged play). Backfilling a few days
+    closes that hole and also covers days the tool simply did not run."""
+    raws=[]
+    if not league: return raws
+    for d in range(1, days_back+1):
+        day=(datetime.now(timezone.utc)-timedelta(days=d)).strftime('%Y%m%d')
+        try:
+            raws.append(gj(f"https://api.actionnetwork.com/web/v2/scoreboard/publicbetting/{league}?date={day}"))
+        except Exception as e:
+            print(f"    ! score backfill failed for {league} {day}: {e}")
+    return raws
+
 def pin_pair(book_map, a, b):
     """Return Pinnacle's (price_a, price_b) if Pinnacle quotes both sides, else None."""
     p=book_map.get('Pinnacle')
@@ -255,13 +305,13 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
         pinp=pin_pair(ml,away,home)
         for s in (away,home):
             pairs=[(dd[s],dd[home if s==away else away]) for dd in ml.values() if away in dd and home in dd]
-            f,n=novig(pairs); anc='consensus'
+            f,fm,n=novig(pairs); anc='consensus'
             if pinp:
                 pa,pb=(pinp[0],pinp[1]) if s==away else (pinp[1],pinp[0])
-                f=am2prob(pa)/(am2prob(pa)+am2prob(pb)); anc='pinnacle'
+                f=fair_pair(pa,pb); fm=am2prob(pa)/(am2prob(pa)+am2prob(pb)); anc='pinnacle'
             if f and s in bov_ml:
                 ev=f*am2dec(bov_ml[s])-1
-                plays.append({'mkt':'ML','side':s,'point':None,'price':bov_ml[s],'fair':f,'ev':ev,'nb':n,'anchor':anc,'pass':gate(bov_ml[s],ev,n)})
+                plays.append({'mkt':'ML','side':s,'point':None,'price':bov_ml[s],'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pass':gate(bov_ml[s],ev,n)})
     # Spread (sport-aware) with consensus-favorite data-error guard
     spread_label=SPREAD_LABEL.get(sport_kind); rl_dataerror=False
     bov_spr=spr.get('Bovada',{})
@@ -286,15 +336,15 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
                 if fp and dp:
                     pairs.append((fp,dp))
                     if bk=='Pinnacle': pinsp=(fp,dp)
-            f,n=novig(pairs); anc='consensus'
+            f,fm,n=novig(pairs); anc='consensus'
             if pinsp:
-                f=am2prob(pinsp[0])/(am2prob(pinsp[0])+am2prob(pinsp[1])); anc='pinnacle'
+                f=fair_pair(pinsp[0],pinsp[1]); fm=am2prob(pinsp[0])/(am2prob(pinsp[0])+am2prob(pinsp[1])); anc='pinnacle'
             if f:
                 ev=f*am2dec(bov_fav_pr)-1
-                plays.append({'mkt':'SPR','side':bov_fav,'point':bov_favpt,'price':bov_fav_pr,'fair':f,'ev':ev,'nb':n,'anchor':anc,'pass':gate(bov_fav_pr,ev,n),'label':spread_label})
+                plays.append({'mkt':'SPR','side':bov_fav,'point':bov_favpt,'price':bov_fav_pr,'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pass':gate(bov_fav_pr,ev,n),'label':spread_label})
                 if bov_dog and bov_dog_pr:
                     evd=(1-f)*am2dec(bov_dog_pr)-1
-                    plays.append({'mkt':'SPR','side':bov_dog,'point':bov_dogpt,'price':bov_dog_pr,'fair':1-f,'ev':evd,'nb':n,'anchor':anc,'pass':gate(bov_dog_pr,evd,n),'label':spread_label})
+                    plays.append({'mkt':'SPR','side':bov_dog,'point':bov_dogpt,'price':bov_dog_pr,'fair':1-f,'fair_mult':(1-fm) if fm is not None else None,'ev':evd,'nb':n,'anchor':anc,'pass':gate(bov_dog_pr,evd,n),'label':spread_label})
     # Totals
     bov_t=tot.get('Bovada',{})
     if 'Over' in bov_t:
@@ -304,18 +354,18 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
             if 'Over' in d2 and 'Under' in d2 and d2['Over']['pt']==line:
                 pairs.append((d2['Over']['pr'],d2['Under']['pr']))
                 if bk=='Pinnacle': pint=(d2['Over']['pr'],d2['Under']['pr'])
-        f,n=novig(pairs); anc='consensus'
+        f,fm,n=novig(pairs); anc='consensus'
         if pint:
-            f=am2prob(pint[0])/(am2prob(pint[0])+am2prob(pint[1])); anc='pinnacle'
+            f=fair_pair(pint[0],pint[1]); fm=am2prob(pint[0])/(am2prob(pint[0])+am2prob(pint[1])); anc='pinnacle'
         if f:
-            for s,fp,pr in [('Over',f,bov_t['Over']['pr']),('Under',1-f,bov_t['Under']['pr'])]:
+            for s,fp,fmp,pr in [('Over',f,fm,bov_t['Over']['pr']),('Under',1-f,(1-fm) if fm is not None else None,bov_t['Under']['pr'])]:
                 ev=fp*am2dec(pr)-1
-                plays.append({'mkt':'TOT','side':s,'point':line,'price':pr,'fair':fp,'ev':ev,'nb':n,'anchor':anc,'pass':gate(pr,ev,n)})
+                plays.append({'mkt':'TOT','side':s,'point':line,'price':pr,'fair':fp,'fair_mult':fmp,'ev':ev,'nb':n,'anchor':anc,'pass':gate(pr,ev,n)})
     passed=[p for p in plays if p['pass']]
     best=max(passed,key=lambda x:x['ev']) if passed else None
     for p in plays: p['fair_am']=prob2am(p['fair'])
     sm=sharp_map.get((away,home))
-    return {'away':away,'home':home,'time':g['commence_time'],'plays':plays,'best':best,
+    return {'away':away,'home':home,'time':g['commence_time'],'event_id':g.get('id'),'plays':plays,'best':best,
             'sharp':sm if sm else None,'rl_dataerror':rl_dataerror,
             'spread_label':spread_label,'three_way':three_way,
             'status':status_map.get((away,home),{'state':'scheduled','display':None}),
@@ -917,7 +967,14 @@ LEVELS = [
     {'from':10, 'to':20, 'min_bets':50,  'min_units':5,  'min_bankroll':800},
     {'from':20, 'to':50, 'min_bets':175, 'min_units':12, 'min_bankroll':2000},
 ]
-def _bkey(p): return f"{p['date']}|{p['away']}|{p['home']}|{p['market']}|{p['side']}"
+def _bkey(p):
+    """Dedupe key for logged plays. The Odds API event id is stable across runs and
+    days, so it prevents two failure modes the old date-based key allowed: (1) a game
+    scheduled for tomorrow getting logged again tomorrow under a new date, and (2)
+    doubleheader games colliding. Legacy plays without an event id keep the old key."""
+    eid=p.get('event_id')
+    if eid: return f"{eid}|{p['market']}|{p['side']}"
+    return f"{p['date']}|{p['away']}|{p['home']}|{p['market']}|{p['side']}"
 def load_log(path):
     if os.path.exists(path):
         try: return json.load(open(path))
@@ -932,36 +989,74 @@ def log_plays(path, recs):
         if _bkey(p) not in existing: log['plays'].append(p); existing.add(_bkey(p)); added+=1
     save_log(path, log); return added
 def _grade_one(p, res):
+    """Returns 'win' / 'loss' / 'push' / None (None = cannot grade). Pushes MUST be
+    graded as pushes: the old version returned None on a pushed line, which left the
+    bet pending forever and quietly corrupted the pending count."""
     mkt=str(p['market']).lower(); side=p['side']; aw,hm=p['away'],p['home']
     ar,hr=res.get('away_runs'),res.get('home_runs')
     if ar is None or hr is None: return None
     if 'moneyline' in mkt or mkt=='ml':
-        if side==aw: return ar>hr
-        if side==hm: return hr>ar
+        if side==aw: return 'win' if ar>hr else 'loss'
+        if side==hm: return 'win' if hr>ar else 'loss'
         return None
     if any(k in mkt for k in ('run line','spread','handicap','puck')):
         pt=p.get('point')
         if pt is None: return None
         margin=(ar-hr) if side==aw else (hr-ar); adj=margin+float(pt)
-        return True if adj>0 else (False if adj<0 else None)
+        return 'win' if adj>0 else ('loss' if adj<0 else 'push')
     if 'total' in mkt or mkt=='o/u':
         pt=p.get('point')
         if pt is None: return None
         tot=ar+hr; pt=float(pt)
-        if tot==pt: return None
-        return (tot>pt) if side=='Over' else (tot<pt)
+        if tot==pt: return 'push'
+        return 'win' if ((tot>pt) if side=='Over' else (tot<pt)) else 'loss'
     return None
+def _pick_result(p, cands):
+    """Choose which final score belongs to this play. Results are now a LIST per
+    matchup (backfill days + doubleheaders can produce several finals for the same
+    away/home pair). Matching order: (1) game start time recorded on the play,
+    (2) legacy plays: the play's log date vs the game's US calendar date,
+    (3) only one candidate exists. Anything still ambiguous is honestly skipped."""
+    if not cands: return None
+    pc=p.get('commence')
+    if pc:
+        try:
+            pt_=datetime.fromisoformat(str(pc).replace('Z','+00:00'))
+            best=None; bestd=None
+            for e in cands:
+                st=e.get('start')
+                if not st: continue
+                d=abs((datetime.fromisoformat(str(st).replace('Z','+00:00'))-pt_).total_seconds())
+                if bestd is None or d<bestd: best,bestd=e,d
+            if best is not None and bestd is not None and bestd<=6*3600:
+                return best
+        except Exception: pass
+    dt=p.get('date')
+    if dt:
+        matches=[]
+        for e in cands:
+            st=e.get('start')
+            try:
+                # minus 5h maps any US game start (roughly 16:00-03:00 UTC) onto its
+                # US calendar date, which is what the play's log date represents
+                sd=(datetime.fromisoformat(str(st).replace('Z','+00:00'))-timedelta(hours=5)).strftime('%Y-%m-%d')
+            except Exception: continue
+            if sd==dt: matches.append(e)
+        if len(matches)==1: return matches[0]
+    if len(cands)==1: return cands[0]
+    return None
+
 def grade_pending(path, results):
     log=load_log(path); n=0
     for p in log['plays']:
         if p.get('result') is not None: continue
-        res=results.get((p['away'],p['home']))
-        if not res or res=='AMBIG': continue
-        won=_grade_one(p,res)
-        if won is None: continue
-        p['result']='win' if won else 'loss'
-        pr=float(p['price']); dec=1+(pr/100 if pr>0 else 100/(-pr)); u=float(p['units'])
-        p['units_pl']=round(u*(dec-1),2) if won else round(-u,2); n+=1
+        res=_pick_result(p, results.get((p['away'],p['home'])))
+        if not res: continue
+        outcome=_grade_one(p,res)
+        if outcome is None: continue
+        p['result']=outcome
+        pr=float(p['price']); dec=am2dec(pr); u=float(p['units'])
+        p['units_pl']=0.0 if outcome=='push' else (round(u*(dec-1),2) if outcome=='win' else round(-u,2)); n+=1
         # closing line value: how our entry price compares to the last pregame price seen.
         # Positive CLV = we beat the close. This converges on truth 10x faster than W/L.
         cp=p.get('close_price')
@@ -973,18 +1068,32 @@ def grade_pending(path, results):
 MARKET_TO_MKT={'moneyline':'ML','run line':'SPR','spread':'SPR','asian handicap':'SPR','puck line':'SPR','total':'TOT'}
 def update_closes(path, allc):
     """While a logged bet's game is still pregame, keep refreshing close_price with the
-    latest Bovada price for the same market/side/point. Once the game goes live the
-    price stops updating, so the stored value is the last pregame price we saw: an
-    honest approximation of the close given the run schedule (labeled as such)."""
+    latest Bovada price for the same market/side/point. The stored value is the last
+    pregame price we saw: an honest approximation of the close given the run schedule.
+
+    Two guards matter here:
+    1. Pregame is checked by the CLOCK (commence_time in the future), not only the
+       status feed. If Action Network is down, every game defaults to 'scheduled' and
+       the old code would happily overwrite the close with LIVE in-play prices, which
+       silently corrupts CLV, the primary validation metric.
+    2. Cards are matched by event id when the play has one (doubleheader-proof);
+       matchup-name matching is only trusted when it is unambiguous."""
     log=load_log(path); touched=0
-    cards={}
+    by_eid={}; by_matchup={}
     for sport,cs in allc.items():
         if sport.startswith('_'): continue
-        for c in cs: cards[(c['away'],c['home'])]=c
+        for c in cs:
+            if c.get('event_id'): by_eid[c['event_id']]=c
+            by_matchup.setdefault((c['away'],c['home']),[]).append(c)
     for p in log['plays']:
         if p.get('result') is not None: continue
-        c=cards.get((p['away'],p['home']))
-        if not c or (c.get('status') or {}).get('state')!='scheduled': continue
+        c=by_eid.get(p.get('event_id'))
+        if c is None:
+            lst=by_matchup.get((p['away'],p['home']),[])
+            c=lst[0] if len(lst)==1 else None
+        if not c: continue
+        hu=hours_until(c.get('time'))
+        if (c.get('status') or {}).get('state')!='scheduled' or hu is None or hu<=0: continue
         want=MARKET_TO_MKT.get(str(p.get('market','')).lower())
         if not want: continue
         for pl in c.get('plays',[]):
@@ -1009,14 +1118,16 @@ def tracker_summary(path, current_unit):
                   'units_done':units_pl,'units_need':nxt['min_units'],'bankroll_need':nxt['min_bankroll'],
                   'ready':(n>=nxt['min_bets'] and units_pl>=nxt['min_units'] and not concentrated)}
     return {'n':n,'wins':wins,'losses':n-wins,'units_pl':units_pl,
+            'pushes':len([p for p in log['plays'] if p.get('result')=='push']),
             'pending':len([p for p in log['plays'] if p.get('result') is None]),
             'concentrated':concentrated,'progress':progress,'current_unit':current_unit}
 
 def collect_results(sharp_raw_by_league):
-    """Pull final scores from Action Network raw payloads already fetched.
-    Doubleheaders (same matchup, two finals with different scores in one payload) are
-    marked AMBIG and skipped by grading, because we cannot tell which game a logged bet
-    belongs to. An honest skip beats a coin-flip grade."""
+    """Pull final scores from every Action Network payload fetched this run (today
+    plus several days of backfill). Returns {(away,home): [finals...]}, each final
+    carrying its start_time so grading can match a logged play to the CORRECT game.
+    This replaces the old single-payload AMBIG flag, which would have wrongly marked
+    the same matchup on consecutive backfill days as ambiguous and skipped both."""
     out={}
     for raw in sharp_raw_by_league:
         for g in (raw.get('games',[]) if raw else []):
@@ -1026,12 +1137,12 @@ def collect_results(sharp_raw_by_league):
                     if t['id']==tid: return t.get('full_name')
             bs=g.get('boxscore') or {}; stats=bs.get('stats') or {}
             ar=(stats.get('away') or {}).get('runs'); hr=(stats.get('home') or {}).get('runs')
-            if ar is not None and hr is not None:
-                k=(nm(g['away_team_id']),nm(g['home_team_id']))
-                if k in out and out[k]!='AMBIG' and (out[k]['away_runs'],out[k]['home_runs'])!=(ar,hr):
-                    out[k]='AMBIG'
-                elif k not in out:
-                    out[k]={'away_runs':ar,'home_runs':hr}
+            if ar is None or hr is None: continue
+            k=(nm(g['away_team_id']),nm(g['home_team_id']))
+            entry={'away_runs':ar,'home_runs':hr,'start':g.get('start_time')}
+            lst=out.setdefault(k,[])
+            if not any(e.get('start')==entry['start'] for e in lst):
+                lst.append(entry)
     return out
 
 def hours_until(iso):
@@ -1062,6 +1173,11 @@ def log_snapshots(path, allc):
                 'has_value':c.get('has_value'),
                 'rec_price':(c.get('rec') or {}).get('price'),
                 'rec_market':(c.get('rec') or {}).get('market'),
+                'rec_side':(c.get('rec') or {}).get('side'),
+                'ev':(c.get('value_play') or {}).get('ev'),
+                'fair':(c.get('value_play') or {}).get('fair'),
+                'anchor':(c.get('value_play') or {}).get('anchor'),
+                'event_id':c.get('event_id'),
                 'units':c.get('units'),
             })
     json.dump({'snaps':snaps}, open(path,'w'), default=str)
@@ -1112,6 +1228,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
         return '6h+'
     overall=agg(settled)
     overall['pending']=len([p for p in log['plays'] if p.get('result') is None])
+    overall['pushes']=len([p for p in log['plays'] if p.get('result')=='push'])
     # cumulative units over time (by date)
     from collections import OrderedDict
     cum=OrderedDict(); running=0.0
@@ -1131,7 +1248,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
         edge_time={k:round(sum(v)/len(v),1) for k,v in b.items() if v}
     # CLV: the fastest truth-teller. Positive average CLV over 50+ bets is the
     # strongest evidence of a real edge, long before W/L stabilizes.
-    clvs=[r['clv'] for r in settled if r.get('clv') is not None]
+    clvs=[r['clv'] for r in log['plays'] if r.get('clv') is not None and r.get('result') is not None]
     clv={'n':len(clvs),
          'avg':round(sum(clvs)/len(clvs),2) if clvs else None,
          'pos_pct':round(100*sum(1 for c in clvs if c>0)/len(clvs)) if clvs else None}
@@ -1159,6 +1276,9 @@ def main():
     os.makedirs(hist, exist_ok=True)   # create history folder if missing
     print("RidgeSeeker: fetching fresh data...")
     print(f"  (python {sys.version.split()[0]} · {ssl.OPENSSL_VERSION})\n")
+    if not ODDS_KEY:
+        print("  !! No Odds API key found. Set the ODDS_KEY env var (GitHub secret) or put")
+        print("     the key in odds_key.txt next to this script for local runs.\n")
     allc={}
     raw_payloads=[]
     for key, skey, kind, an in SPORTS:
@@ -1167,6 +1287,7 @@ def main():
         print(f"{len(odds)} games", end="")
         sharp_map, status_map, raw = fetch_sharp_and_status(an)
         if raw: raw_payloads.append(raw)
+        raw_payloads.extend(fetch_scores_for_dates(an))   # grade night games + missed days
         sf = soft_fair_map(odds)
         cards=[]
         for g in odds:
@@ -1195,9 +1316,10 @@ def main():
             if (sg and sg['grade'] in ('S','A')) or (rec and rec.get('double')):
                 vp=c.get('value_play') or {}
                 top.append({'sport':sport.upper(),'away':c['away'],'home':c['home'],'time':c['time'],
+                            'event_id':c.get('event_id'),
                             'grade':sg['grade'] if sg else None,'rec':rec,'sg':sg,'has_value':c.get('has_value'),
                             'status':c.get('status'),'units':c.get('units'),'units_reason':c.get('units_reason'),
-                            'ev':vp.get('ev'),'fair':vp.get('fair'),'anchor':vp.get('anchor'),
+                            'ev':vp.get('ev'),'fair':vp.get('fair'),'fair_mult':vp.get('fair_mult'),'anchor':vp.get('anchor'),
                             'unit_dollars':UNIT_DOLLARS})
     top.sort(key=lambda x:(-(2 if x['rec'] and x['rec'].get('double') else 0), -GORD.get(x['grade'],0)))
     allc['_top']=top
@@ -1228,7 +1350,9 @@ def main():
                            'grade':t.get('grade'),'gap':sg.get('gap'),
                            'contrarian':sg.get('contrarian'),'steam':sg.get('steam'),
                            'has_value':t.get('has_value'),
-                           'ev':t.get('ev'),'fair':t.get('fair'),'anchor':t.get('anchor'),
+                           'ev':t.get('ev'),'fair':t.get('fair'),'fair_mult':t.get('fair_mult'),
+                           'anchor':t.get('anchor'),
+                           'commence':t['time'],'event_id':t.get('event_id'),
                            'model_version':MODEL_VERSION,'close_price':None,'clv':None,
                            'hours_to_game':hours_until(t['time'])})
     added=log_plays(log_path, todays)
@@ -1246,12 +1370,14 @@ def main():
     os.makedirs(csv_dir, exist_ok=True)
     betlog=load_log(log_path)
     write_csv(os.path.join(csv_dir,"bets.csv"), betlog['plays'],
-              ['date','sport','away','home','market','side','point','price','units',
-               'grade','gap','contrarian','steam','has_value','hours_to_game','result','units_pl'])
+              ['date','commence','sport','away','home','market','side','point','price','units',
+               'grade','gap','contrarian','steam','has_value','ev','fair','fair_mult','anchor',
+               'close_price','clv','hours_to_game','result','units_pl','model_version','event_id'])
     snaps_all=(json.load(open(snap_path)).get('snaps',[]) if os.path.exists(snap_path) else [])
     write_csv(os.path.join(csv_dir,"snapshots.csv"), snaps_all,
               ['run_ts','sport','game','commence','hours_to_game','sharp_side','grade','gap',
-               'tickets','money','contrarian','steam','has_value','rec_price','rec_market','units'])
+               'tickets','money','contrarian','steam','has_value','rec_price','rec_market','rec_side',
+               'ev','fair','anchor','event_id','units'])
 
     # render HTML
     html = TEMPLATE_HEAD + "\n<script>\nconst ALL=" + json.dumps(allc, default=str) + ";\n</script>\n<script>\n" + TEMPLATE_APP + "\n</script>\n</body>\n</html>"

@@ -2,7 +2,7 @@
 
 **Purpose of this file:** you are an AI assistant helping the owner (a hobbyist sports bettor, not a professional developer) modify this program. This document tells you what the program is, how it is built, and which decisions are deliberate so you do not undo them while helping. Read it fully before proposing changes.
 
-**Doc version:** 2026-07-02 (v9). Update the changelog at the bottom whenever you change the code.
+**Doc version:** 2026-07-02 (v10). Update the changelog at the bottom whenever you change the code.
 
 ---
 
@@ -14,7 +14,7 @@ Every time you change the code, hand the owner back BOTH the updated `ridgeseeke
 
 ## 0b. File handback protocol (the owner uploads via the GitHub web UI)
 
-The owner updates the repo by unzipping what you send and using GitHub's Add file -> Upload files at the repo ROOT. That upload overwrites same-named root files but CANNOT place files into `.github/workflows/`. Therefore: hand back only root-level files (`ridgeseeker.py`, `HANDOFF.md`, `FUTURE.md`, `README.md`). If the workflow must change, give the owner the full file contents to paste via the web editor at `.github/workflows/edgefinder.yml`, and say so explicitly. Never hand back `ridgeseeker_betlog.json` or `ridgeseeker_snapshots.json`: the bot owns those.
+The owner updates the repo by unzipping what you send and using GitHub's Add file -> Upload files at the repo ROOT. That upload overwrites same-named root files but CANNOT place files into `.github/workflows/`. Therefore: hand back only root-level files (`ridgeseeker.py`, `HANDOFF.md`, `FUTURE.md`, `README.md`, `AUDIT_TODO.md`, `.gitignore`). If the workflow must change, give the owner the full file contents to paste via the web editor at `.github/workflows/edgefinder.yml`, and say so explicitly. Never hand back `ridgeseeker_betlog.json` or `ridgeseeker_snapshots.json`: the bot owns those.
 
 ---
 
@@ -32,7 +32,7 @@ The owner updates the repo by unzipping what you send and using GitHub's Add fil
 
 RidgeSeeker is a single Python script (`ridgeseeker.py`, ~1250 lines) that:
 1. Fetches MLB odds (The Odds API) and sharp-money splits + live status + final scores (Action Network, free/no-auth).
-2. Computes a "fair" probability anchored to DEVIGGED PINNACLE (fetched via the eu region of The Odds API; every play carries `anchor`: 'pinnacle' or 'consensus'). When Pinnacle skips a market or line, it falls back to the no-vig median of ~25 books. Compares fair to Bovada and flags **value** (EV >= 3%).
+2. Computes a "fair" probability anchored to DEVIGGED PINNACLE (fetched via the eu region of The Odds API; every play carries `anchor`: 'pinnacle' or 'consensus'). Devig uses the POWER method (`fair_pair`), not proportional scaling: proportional devig overstates the fair probability of the longer-priced side and inflated stated EV by ~1.3 to ~4.3 points on the +150 to +250 dogs this tool prefers. The old proportional number is still logged on every play as `fair_mult` for later comparison. When Pinnacle skips a market or line, it falls back to the no-vig median of ~25 books (also power-devigged). Compares fair to Bovada and flags **value** (EV >= 3%).
 3. Grades **sharp money** S/A/B/C/D from the money%-minus-tickets% gap, with contrarian and steam confirmation.
 4. Suggests a **unit size** (1u / 1.5u / 2u) per play, with a hard longshot cap.
 5. Tracks results automatically: logs plays (stamped with `MODEL_VERSION`, stated `ev`, `fair`, `anchor`), refreshes each pending play's `close_price` every run while pregame, grades against final scores, computes units/ROI AND closing line value (CLV), reports level-up progress.
@@ -43,7 +43,7 @@ Runs on **GitHub Actions** (cloud) 3x/day and publishes to **GitHub Pages**. Als
 
 ---
 
-## 3. File structure (single file: edgefinder.py)
+## 3. File structure (single file: ridgeseeker.py)
 
 Top to bottom:
 
@@ -113,9 +113,11 @@ Level-up gates (`LEVELS`): $10->$20 needs ~50 settled bets AND >= +5u AND ~$800 
 
 - **The Odds API** (`fetch_odds`): key via `ODDS_KEY` env (GitHub secret), hardcoded fallback for local. **Cost = markets x regions per call.** Currently `regions=us` (1) x `h2h,spreads,totals` (3) = **3 credits/run**. Free tier ~500/month. 3x/day = ~270/month. Adding a sport, region, or run frequency can blow the budget. Do the math before changing cadence.
 - **Action Network** (`fetch_sharp_and_status`): free, no auth, needs a browser User-Agent. Provides ticket%/money% splits, live status with real inning, and final scores (`boxscore.stats.{away,home}.runs`). US team sports only. Source for grades, live badges, AND result grading. If down, value scanning still works but grades/results do not.
+- **Score backfill** (`fetch_scores_for_dates`, v10): every run also pulls the AN scoreboard for the past 3 days via `?date=YYYYMMDD` (free). Without this, night games finishing after the day's last run NEVER got graded (a real logged play sat pending 2 days). Results are a LIST of finals per matchup with start times; `_pick_result` matches a play to the correct game via its logged `commence` time (or log date for legacy plays) and honestly skips true ambiguity. Do not remove the backfill.
+- **API key (v10):** `ODDS_KEY` env var, or `odds_key.txt` next to the script for local runs (gitignored). NEVER hardcode a key: the repo is public. The pre-v10 key was exposed in git history and must stay rotated out.
 - **Pinnacle: the fair-value anchor (v9).** The old claim that Pinnacle is paywalled on free feeds was WRONG: The Odds API serves Pinnacle in the `eu` region on the free tier. `fetch_odds` now requests `regions=us,eu`, which DOUBLES the credit cost: 3 markets x 2 regions = **6 credits/run**. At 2 scheduled runs/day that is ~360/month of the ~500 free, leaving manual-run headroom. Do not add sports, regions, or scheduled runs without redoing this math.
 - **CLV (closing line value), v9:** `update_closes` refreshes `close_price` on pending pregame plays each run; `grade_pending` computes `clv` = decimal(entry)/decimal(close) - 1 at settlement. The close is the LAST PREGAME PRICE THIS TOOL SAW, an approximation given 2 runs/day; the UI says so honestly. CLV is the primary validation metric: consistently positive CLV over 50+ bets is evidence of real edge long before W/L stabilizes. Do not remove it, and do not present the approximate close as a true close.
-- **Doubleheaders:** `collect_results` marks a matchup AMBIG when one payload contains two different finals for the same teams, and grading skips it. An honest skip beats a coin-flip grade.
+- **Doubleheaders and duplicates (v10):** plays now log the Odds API `event_id` and `commence` time. Dedupe keys on event_id (prevents re-logging tomorrow's game tomorrow), close refresh matches by event_id, and result grading matches by start time. `update_closes` also requires the game start to be in the FUTURE BY CLOCK, not just status 'scheduled', so a downed status feed can never let live prices contaminate the close (CLV integrity). Pushes grade as 'push' with 0 units_pl instead of pending forever; W/L record and ROI exclude them by convention.
 
 ---
 
@@ -154,6 +156,8 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 ---
 
 ## Changelog
+
+- **v10 (2026-07-02), audit batch 1 (see AUDIT_TODO.md for the full findings ledger):** (1) SECURITY: removed the hardcoded Odds API key (env or gitignored odds_key.txt only); owner must rotate the exposed key. (2) Devig switched from proportional to the power method everywhere decisions are made; proportional still logged as `fair_mult` per play for later A/B on real results. (3) Score backfill: AN scoreboard fetched for the past 3 days each run so night games and missed days get graded; results keyed as lists of finals with start times, matched to plays via new `commence`/`event_id` fields. (4) Pushes now grade as 'push' (0 units) instead of pending forever. (5) `update_closes` hardened: clock-based pregame guard + event-id matching, protecting CLV from live-price contamination. (6) Dedupe key uses event_id, killing cross-day duplicate logging and doubleheader collisions. (7) bets.csv and snapshots.csv export the full field set (ev, fair, fair_mult, anchor, clv, close_price, commence, event_id, model_version). (8) MODEL_VERSION bumped to v10-audit1: pre-v10 plays used proportional devig, segment analyses accordingly. (9) Workflow replaced (paste-in `ridgeseeker.yml`, delete `edgefinder.yml`): the old one still ran `python edgefinder.py` and every scheduled run failed.
 
 - **v9 (2026-07-02), renamed RidgeSeeker:** (1) Fair value is now anchored to devigged Pinnacle, fetched via `regions=us,eu` (the old "Pinnacle is paywalled" premise was wrong); consensus median remains the fallback and every play records its `anchor`. (2) Added closing line value: pending plays get `close_price` refreshed while pregame and `clv` computed at grading; Results tab shows avg CLV and beat-the-close rate, plus a new "By stated EV" table. (3) Logged plays now carry `model_version`, `ev`, `fair`, `anchor`. (4) Doubleheader finals are detected as ambiguous and skipped rather than coin-flip graded. (5) Dashboard text no longer claims Kalshi/Polymarket sources that were never implemented (honesty fix). (6) File renames with auto-migration: `ridgeseeker.py`, `ridgeseeker_betlog.json`, `ridgeseeker_snapshots.json`, `ridgeseeker_history/`; old EdgeFinder files are adopted on first run, history preserved. (7) Workflow (paste-in): name RidgeSeeker, 2 scheduled runs/day (15:00 and 21:30 UTC), concurrency guard, pull-rebase before push, snapshots file now committed. Credit math: 6/run x 2/day = ~360 of ~500 free monthly.
 

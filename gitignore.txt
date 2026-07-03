@@ -1,0 +1,7 @@
+# Never commit the API key. This repo is public (GitHub Pages free tier requires it).
+odds_key.txt
+
+# Local-run artifacts (CI writes its copies into docs/ and commits those instead)
+ridgeseeker_latest.html
+__pycache__/
+*.pyc
