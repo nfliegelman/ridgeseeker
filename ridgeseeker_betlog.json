@@ -100,12 +100,12 @@
       "commence": "2026-07-04T01:40:00Z",
       "event_id": "5434f34b7e8232a7091f0e3efdd4a175",
       "model_version": "2026-07-02.v10-audit1",
-      "close_price": 119,
-      "clv": null,
+      "close_price": -128,
+      "clv": 22.95,
       "hours_to_game": 9.0,
       "date": "2026-07-03",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.19
     }
   ]
 }
