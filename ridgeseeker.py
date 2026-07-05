@@ -332,6 +332,18 @@ def fetch_odds(sport_key, markets="h2h,spreads,totals"):
     try: return gj(url)
     except Exception as e: print(f"    ! odds fetch failed for {sport_key}: {e}"); return []
 
+def _an_same_game(entry, commence):
+    """F45: an AN entry only belongs to an odds-API game if their start times sit
+    within 12h. Same-series matchups repeat (away,home) on consecutive days and the
+    evening board lists both; without this check tomorrow's card inherits today's
+    splits, status, and sharp grade."""
+    try:
+        a=datetime.fromisoformat(str(entry.get('an_start')).replace('Z','+00:00'))
+        c=datetime.fromisoformat(str(commence).replace('Z','+00:00'))
+        return abs((a-c).total_seconds())<12*3600
+    except Exception:
+        return True   # missing timestamps: keep old behavior rather than dropping data
+
 def fetch_sharp_and_status(league):
     """Returns (sharp_map, status_map). sharp_map keyed (away,home)->{splits,num_bets}; status_map->{state,display}"""
     if not league: return {}, {}, None
@@ -349,7 +361,7 @@ def fetch_sharp_and_status(league):
         elif st in ('complete','closed'): state='final'
         elif st=='weatherdelay': state='delay'
         else: state='scheduled'
-        status[(a,h)]={'state':state,'display':disp}
+        status[(a,h)]={'state':state,'display':disp,'an_start':g.get('start_time')}
         # sharp splits
         sd={}
         for bid,mk in g.get('markets',{}).items():
@@ -377,7 +389,7 @@ def fetch_sharp_and_status(league):
             sharp[(a,h)]={'splits':{k:{'tickets':statistics.mean(v['tk']) if v['tk'] else 0,
                                        'money':statistics.mean(v['mn']) if v['mn'] else 0,
                                        'odds':statistics.median(v['od']) if v['od'] else None} for k,v in sd.items()},
-                          'num_bets':g.get('num_bets'),'an_ml':an_ml or None}
+                          'num_bets':g.get('num_bets'),'an_ml':an_ml or None,'an_start':g.get('start_time')}
     return sharp, status, raw
 
 def fetch_mlb_context():
@@ -714,6 +726,8 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
     best=max(passed,key=lambda x:x['ev']) if passed else None
     for p in plays: p['fair_am']=prob2am(p['fair'])
     sm=sharp_map.get((away,home))
+    if sm is not None and isinstance(sm,dict) and sm.get('an_start') is not None and not _an_same_game(sm, g['commence_time']):
+        sm=None   # F45
     # F23 capture-or-lose: per-book h2h prices + dispersion, persisted in snapshots.
     # Compact on purpose (h2h only): the fields that make bookmaker-disagreement
     # features and per-bet EV confidence intervals possible later. Kept off the
@@ -736,7 +750,7 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
             '_ex_back':ex_back if ex_back else None,'_ex_lay':ex_lay if ex_lay else None,
             'sharp':sm if sm else None,'rl_dataerror':rl_dataerror,
             'spread_label':spread_label,'three_way':three_way,
-            'status':status_map.get((away,home),{'state':'scheduled','display':None}),
+            'status':(lambda _st: _st if (_st and _an_same_game(_st, g['commence_time'])) else {'state':'scheduled','display':None})(status_map.get((away,home))),
             'has_value':any(p['pass'] for p in plays),'value_play':best,
             '_sharp_raw':sm,'_soft_fair':soft_fair.get((away,home),{})}
 
@@ -1677,7 +1691,7 @@ def log_snapshots(path, allc):
                 'event_id':c.get('event_id'),
                 'units':c.get('units'),
                 'books_h2h':c.get('_books_h2h'),'h2h_disp':c.get('_h2h_disp'),
-                'an_ml':(c.get('sharp') or {}).get('an_ml'),
+                'an_ml':c.get('an_ml'),
                 'ex_back':c.get('_ex_back'),'ex_lay':c.get('_ex_lay'),
                 'ml_ex_mid':next((p.get('ex_mid') for p in c.get('plays',[]) if p['mkt']=='ML' and p.get('ex_mid') is not None),None),
             })
@@ -1848,10 +1862,14 @@ def main():
             c=analyze_game(g, kind, {k:v['splits'] for k,v in sharp_map.items()}, status_map, sf)
             # grade
             sm=sharp_map.get((c['away'],c['home']))
+            if sm and not _an_same_game(sm, c['time']): sm=None   # F45: wrong-day splits never attach
+            if sm is None:
+                c['sharp']=None   # F45: board chips must not show yesterday's splits either
+            c['an_ml']=(sm or {}).get('an_ml')   # F45c: an_ml now actually reaches cards
             sg=None
             if sm: sg=grade_sharp(sm['splits'], c['_soft_fair'], num_bets=sm.get('num_bets'), sport_kind=kind)
             c['sharp_grade']=sg
-            c['rec']=build_recommendation(c, sg)
+            c['rec']=build_recommendation(c, sg) if (hours_until(c['time']) or 0)>0 else None
             u, ureason = suggest_units(c)
             c['units']=u; c['units_reason']=ureason
             c['unit_dollars']=UNIT_DOLLARS
@@ -2040,7 +2058,7 @@ def main():
             play['exec_best_venue']=max(_cand,key=_cand.get) if _cand else None
             play['exec_best_ev']=round(_cand[play['exec_best_venue']],4) if _cand else None
             # our-side AN per-book ML prices (source sweep, log-only)
-            _anm=((t.get('sharp') or {}).get('an_ml')) or None
+            _anm=t.get('an_ml') or None
             if _anm and r.get('market')=='Moneyline':
                 _sk='away' if str(r.get('side'))==str(t['away']) else ('home' if str(r.get('side'))==str(t['home']) else None)
                 play['an_ml']={b:v.get(_sk) for b,v in _anm.items() if v.get(_sk)} if _sk else None
