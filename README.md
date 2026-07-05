@@ -10,11 +10,11 @@ Finds real sports betting edges (MLB now; more sports in season) and tracks whet
 
 ## How it grades itself
 - Every recommended play is logged and graded automatically off final scores.
-- **Closing line value (CLV)** is the headline metric: did your entry price beat the last pregame price? Consistently positive CLV over 50+ bets is proof of edge long before wins and losses settle the argument.
+- **EV at close** is the headline metric: your entry price scored against the market's final fair value (devigged Pinnacle when available). Price CLV (did your entry beat the last Bovada price?) is tracked alongside. Consistently positive over 50+ measured bets is proof of edge long before wins and losses settle the argument.
 - Results tab: record, ROI, CLV, and breakdowns by stated EV, sharp grade, unit size, market, price, and time-to-game.
 
 ## Schedule
-Two runs daily: 15:00 UTC (~10am Central: grades last night, morning board) and 21:30 UTC (~4:30pm Central: pre-slate board with matured sharp money, final close capture). Uses ~360 of the ~500 free monthly API credits, leaving headroom for manual runs.
+Covers MLB now, with NFL, NBA, NHL, college football, and college basketball lighting up automatically when their seasons start (off-season sports cost nothing). Three runs daily: 15:00 UTC (~10am Central: grades last night, morning board), 21:30 UTC (~4:30pm Central: pre-slate board with matured sharp money), and 22:45 UTC (~5:45pm Central: a cheap close-capture pass that sharpens CLV right before the night slate, no new plays). Uses ~420 of the ~500 free monthly API credits, leaving headroom for manual runs.
 
 ## Honest use
 Paper trade until CLV is positive over 100+ bets. Level-up gates ($10 to $20 to $50 units) are built in and deliberately strict.

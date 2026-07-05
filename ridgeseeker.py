@@ -34,24 +34,149 @@ if not ODDS_KEY:
         try: ODDS_KEY = open(_kf).read().strip()
         except Exception: pass
 # Stamp every logged bet so history survives retunes and versions can be compared.
-MODEL_VERSION = "2026-07-02.v10-audit1"
+MODEL_VERSION = "2026-07-04.v13-research1"
 HISTORY_FOLDER = "ridgeseeker_history"           # timestamped HTMLs saved here
 # Auto-detect: are we running on GitHub's servers (cloud) or on a personal laptop?
 CI = (os.environ.get("GITHUB_ACTIONS") == "true") or bool(os.environ.get("EDGEFINDER_CI"))
+# Run mode: 'full' (default) = whole pipeline. 'close' = cheap close-capture run:
+# fetches h2h only (2 API credits instead of 6), refreshes close prices on pending
+# pregame plays, grades finished ones, and exits. It NEVER logs new plays (an
+# h2h-only board would bias play selection) and does not rebuild the dashboard.
+# Modes: full (fetch, log plays, everything) / observe (full pipeline but NEVER logs
+# plays: for the pre-15:00 opener board, so extra observations sharpen closes and
+# line-velocity data WITHOUT changing entry timing, which would be a silent model
+# change) / close (h2h only, refresh closes + grade, cheapest).
+RUN_MODE = os.environ.get("RS_MODE", "full").strip().lower()
+
+# F26 (default OFF): named-bookmaker fetch. Up to 10 named books from ANY region
+# bill as ONE region, so this curated list would cut a full run from 6 credits to
+# 3 and a close run from 2 to 1. DO NOT enable until the owner's verification curl
+# confirms (a) these keys carry baseball_mlb and (b) whether exchange h2h_lay rows
+# bill as an extra market (docs price by unique markets IN THE RESPONSE).
+# To enable: set env RS_BOOKMAKERS=1 or paste the list into BOOKMAKERS_PARAM.
+# Enabling changes the consensus composition, so MODEL_VERSION auto-appends +bk10.
+BOOKMAKERS_CURATED = "bovada,pinnacle,betfair_ex_eu,matchbook,betonlineag,lowvig,draftkings,fanduel,betmgm,marathonbet"
+_bk_env=os.environ.get("RS_BOOKMAKERS","").strip().lower()
+BOOKMAKERS_PARAM = BOOKMAKERS_CURATED if _bk_env not in ("","0","false","no","off") else ""
+# Exchange books quote back/lay spread, not vig; matched by stable API key, not title
+EXCHANGE_KEYS = {"betfair_ex_eu","betfair_ex_uk","betfair_ex_au","matchbook"}
+
+# Prediction-market venues (owner bets both). LOG-ONLY capture per ML play; venue
+# routing as a DECISION stays gated (FUTURE roadmap). These are the two venues where
+# winning is allowed: no limits, no bans, real two-sided prices. Kalshi taker fee is
+# the killer detail: 0.07 * price * (1-price) per contract, i.e. ~4% of stake on a
+# 40c dog, which eats a 3% edge whole. Maker (limit) fills pay no fee. Polymarket
+# charges no fee; overnight resting quotes are wide, so the mid is the signal.
+KALSHI_SERIES = {'mlb':'KXMLBGAME','nfl':'KXNFLGAME','nba':'KXNBAGAME','nhl':'KXNHLGAME'}
+POLY_TAGS = {'mlb':'mlb','nfl':'nfl','nba':'nba','nhl':'nhl','ncaaf':'cfb','ncaab':'cbb'}
+KALSHI_MLB = {  # Odds API full name -> Kalshi ticker code (verify misses via alarm)
+ 'Arizona Diamondbacks':'AZ','Atlanta Braves':'ATL','Baltimore Orioles':'BAL','Boston Red Sox':'BOS',
+ 'Chicago Cubs':'CHC','Chicago White Sox':'CWS','Cincinnati Reds':'CIN','Cleveland Guardians':'CLE',
+ 'Colorado Rockies':'COL','Detroit Tigers':'DET','Houston Astros':'HOU','Kansas City Royals':'KC',
+ 'Los Angeles Angels':'LAA','Los Angeles Dodgers':'LAD','Miami Marlins':'MIA','Milwaukee Brewers':'MIL',
+ 'Minnesota Twins':'MIN','New York Mets':'NYM','New York Yankees':'NYY','Athletics':'ATH',
+ 'Oakland Athletics':'ATH','Philadelphia Phillies':'PHI','Pittsburgh Pirates':'PIT','San Diego Padres':'SD',
+ 'San Francisco Giants':'SF','Seattle Mariners':'SEA','St. Louis Cardinals':'STL','Tampa Bay Rays':'TB',
+ 'Texas Rangers':'TEX','Toronto Blue Jays':'TOR','Washington Nationals':'WSH'}
+
+# Kalshi fee model, corrected per the 2026-07 research pass against the OFFICIAL
+# schedule (kalshi.com/docs/kalshi-fee-schedule.pdf, June 2026): taker fee per order
+# = ROUND UP(0.07 x contracts x P x (1-P)) to the cent. Maker fees now EXIST on many
+# markets; third-party sources converge on ~25% of taker (0.0175 mult) where charged,
+# and special events can carry a flat per-contract maker fee this model does NOT
+# capture. We charge the maker fee by default: if a given market is actually 0%
+# maker, our logged EV is UNDERSTATED, which is the safe direction. Per-order cent
+# rounding matters at $10-20 stakes and is modeled. Assumption A11 tracks this.
+KALSHI_TAKER_MULT = 0.07
+KALSHI_MAKER_MULT = 0.0175
+import math as _math
+def kalshi_fee(price, contracts, mult):
+    if not price or contracts<1: return 0.0
+    # round before ceil: exact-cent boundaries float to 42.000000000000006 and
+    # would overcharge a phantom cent
+    return _math.ceil(round(mult*contracts*price*(1.0-price)*100.0,6))/100.0
+def kalshi_ev(fair, price, contracts, mult):
+    """EV per $1 of cost, fee-adjusted with per-order rounding. Payout = contracts x $1."""
+    if not (fair and price and contracts>=1): return None
+    cost=contracts*price + kalshi_fee(price, contracts, mult)
+    return round(fair*contracts/cost - 1.0, 4)
+# Polymarket: MLB/NFL/NBA/NHL game markets are fee-free (0% maker, taker rebates fund
+# makers). NCAAB markets created after 2026-02-18 carry a 0.0625 x P x (1-P) taker
+# fee; modeled when CBB activates.
+POLY_TAKER_MULT = {'ncaab':0.0625}
+
+# Stale-anchor discard (research: Pinnacle odds here are scraped and can lag their
+# real trading prices; an "edge" against a stale quote is a phantom). Value recs
+# anchored on a Pinnacle quote older than this many minutes are NOT logged and are
+# labeled on the board. A10 mitigation.
+PIN_STALE_MIN = 15
+
+VENUE_GEO = {  # name -> (lat, lon, roof: open/fixed/retract). Weather-grid precision only.
+ 'Fenway Park':(42.346,-71.097,'open'),'Yankee Stadium':(40.829,-73.926,'open'),
+ 'Oriole Park at Camden Yards':(39.284,-76.622,'open'),'Tropicana Field':(27.768,-82.653,'fixed'),
+ 'George M. Steinbrenner Field':(27.980,-82.507,'open'),'Rogers Centre':(43.641,-79.389,'retract'),
+ 'Rate Field':(41.830,-87.634,'open'),'Guaranteed Rate Field':(41.830,-87.634,'open'),
+ 'Progressive Field':(41.496,-81.685,'open'),'Comerica Park':(42.339,-83.049,'open'),
+ 'Kauffman Stadium':(39.051,-94.480,'open'),'Target Field':(44.982,-93.278,'open'),
+ 'Angel Stadium':(33.800,-117.883,'open'),'Daikin Park':(29.757,-95.356,'retract'),
+ 'Minute Maid Park':(29.757,-95.356,'retract'),'Sutter Health Park':(38.580,-121.513,'open'),
+ 'T-Mobile Park':(47.591,-122.332,'retract'),'Globe Life Field':(32.747,-97.081,'retract'),
+ 'Truist Park':(33.890,-84.468,'open'),'loanDepot park':(25.778,-80.220,'retract'),
+ 'Citi Field':(40.757,-73.846,'open'),'Citizens Bank Park':(39.906,-75.166,'open'),
+ 'Nationals Park':(38.873,-77.007,'open'),'Wrigley Field':(41.948,-87.655,'open'),
+ 'Great American Ball Park':(39.097,-84.507,'open'),'PNC Park':(40.447,-80.006,'open'),
+ 'Busch Stadium':(38.623,-90.193,'open'),'American Family Field':(43.028,-87.971,'retract'),
+ 'Chase Field':(33.445,-112.067,'retract'),'Coors Field':(39.756,-104.994,'open'),
+ 'Dodger Stadium':(34.074,-118.240,'open'),'Petco Park':(32.707,-117.157,'open'),
+ 'Oracle Park':(37.778,-122.389,'open')}
+
+PARK_RF_APPROX = {  # APPROXIMATE run factors (100=neutral). Replace with an official
+ # Statcast park-factor export before using in any decision; logged as *_approx.
+ 'Coors Field':113,'Fenway Park':108,'Great American Ball Park':107,'Yankee Stadium':104,
+ 'Citizens Bank Park':104,'Chase Field':103,'Rogers Centre':102,'Wrigley Field':102,
+ 'Kauffman Stadium':101,'Truist Park':101,'Rate Field':101,'Guaranteed Rate Field':101,
+ 'American Family Field':101,'Nationals Park':100,'Oriole Park at Camden Yards':100,
+ 'Target Field':99,'Progressive Field':99,'Daikin Park':99,'Minute Maid Park':99,
+ 'Angel Stadium':98,'Dodger Stadium':98,'Globe Life Field':98,'Comerica Park':97,
+ 'Busch Stadium':97,'PNC Park':97,'loanDepot park':97,'Citi Field':96,'Petco Park':96,
+ 'Oracle Park':95,'T-Mobile Park':93,'Tropicana Field':98,'Sutter Health Park':105,
+ 'George M. Steinbrenner Field':104}
+if BOOKMAKERS_PARAM: MODEL_VERSION += "+bk10"   # curated-book consensus is a different model
 UA = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 
 # Sports to scan: (tab_key, odds_api_key, sport_kind, action_network_league_or_None)
+# Multi-sport registry (2026-07-04). Every entry: dashboard key, Odds API sport key,
+# kind (drives spread label + grading), Action Network slug (live-verified for all
+# six), label, active months UTC (season window: OFF-SEASON SPORTS ARE NEVER FETCHED,
+# zero credits), enabled flag. Preseason months excluded on purpose (garbage lines).
+# CREDIT REALITY (see AUDIT_TODO F38): 5 overlapping sports in Oct-Nov at the proper
+# cadence needs the $30/mo 20K plan. The free 500 carries MLB-only summer fine.
+# Sharp thresholds for new sports use _default until each earns its own calibration;
+# every play carries 'sport', and the pre-registered protocol applies PER SPORT.
+# RS_SPORTS env (comma keys) overrides windows/flags for testing or manual runs.
 SPORTS = [
-    ('mlb', 'baseball_mlb',            'baseball', 'mlb'),
-    # Focused on MLB for now (it's what you're betting + keeps API usage low).
-    # When you add a sport, uncomment and drop your daily run count to stay under the
-    # free API budget. Each sport adds ~3 credits per run.
-    # ('wc',  'soccer_fifa_world_cup',   'soccer',   None),
-    # ('mma', 'mma_mixed_martial_arts',  'mma',      None),
-    # ('nfl', 'americanfootball_nfl',   'americanfootball', 'nfl'),
-    # ('nba', 'basketball_nba',         'basketball', 'nba'),
-    # ('nhl', 'icehockey_nhl',          'icehockey',  'nhl'),
+    {'key':'mlb',  'odds':'baseball_mlb',          'kind':'baseball',         'an':'mlb',  'label':'MLB',  'months':{3,4,5,6,7,8,9,10,11}, 'enabled':True},
+    {'key':'nfl',  'odds':'americanfootball_nfl',  'kind':'americanfootball', 'an':'nfl',  'label':'NFL',  'months':{9,10,11,12,1,2},      'enabled':True},
+    {'key':'nba',  'odds':'basketball_nba',        'kind':'basketball',       'an':'nba',  'label':'NBA',  'months':{10,11,12,1,2,3,4,5,6},'enabled':True},
+    {'key':'nhl',  'odds':'icehockey_nhl',         'kind':'icehockey',        'an':'nhl',  'label':'NHL',  'months':{10,11,12,1,2,3,4,5,6},'enabled':True},
+    {'key':'ncaaf','odds':'americanfootball_ncaaf','kind':'americanfootball', 'an':'ncaaf','label':'CFB',  'months':{8,9,10,11,12,1},      'enabled':True},
+    {'key':'ncaab','odds':'basketball_ncaab',      'kind':'basketball',       'an':'ncaab','label':'CBB',  'months':{11,12,1,2,3,4},       'enabled':True},
+    # WNBA: feed live-verified, in season NOW. Disabled until F26 halves per-sport
+    # cost; enabling it today on the free tier overruns the monthly budget.
+    {'key':'wnba', 'odds':'basketball_wnba',       'kind':'basketball',       'an':'wnba', 'label':'WNBA', 'months':{5,6,7,8,9,10},        'enabled':False},
 ]
+
+def active_sports():
+    ov=os.environ.get("RS_SPORTS","").strip().lower()
+    if ov:
+        want={k.strip() for k in ov.split(',') if k.strip()}
+        return [s for s in SPORTS if s['key'] in want]
+    m=datetime.now(timezone.utc).month
+    return [s for s in SPORTS if s['enabled'] and m in s['months']]
+
+# Your Odds API plan's monthly credits; used only to WARN when the active-sport
+# schedule projects over budget. Set to 20000 after upgrading.
+PLAN_CREDITS = 500
 
 # Per-sport sharp-grade thresholds (gap = money% minus tickets% on the sharp side).
 # Anchored to the real MLB gap distribution: median ~9, 75th pctile ~15, 90th ~22.
@@ -69,6 +194,11 @@ MIN_EV, LONGSHOT_CAP, EV_CEILING, MIN_BOOKS = 0.03, 500, 0.25, 3
 # The app tracks your results and tells you when you've earned the next level.
 UNIT_DOLLARS = 10
 BANKROLL = None   # optional: set your total betting bankroll for level-up safety checks
+# Daily exposure guidance. Bets on different games are independent, but 6 dogs on one
+# slate is still 6-9u of one-day variance (up to ~10-20% of a small bankroll). Plays
+# past this are still LOGGED (the tracker wants all data while paper trading); the
+# dashboard just flags the total so real-money days get prioritized by EV.
+MAX_DAILY_UNITS = 6.0
 
 # ============================ HELPERS ============================
 import ssl
@@ -194,8 +324,11 @@ SPREAD_LABEL={'baseball':'Run Line','soccer':'Asian Handicap','americanfootball'
 
 
 # ============================ DATA FETCH ============================
-def fetch_odds(sport_key):
-    url=f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={ODDS_KEY}&regions=us,eu&markets=h2h,spreads,totals&oddsFormat=american"
+def fetch_odds(sport_key, markets="h2h,spreads,totals"):
+    # Credit cost = number of markets x number of regions. Full run: 3 x 2 = 6.
+    # Close-capture run passes markets="h2h": 1 x 2 = 2.
+    src=(f"bookmakers={BOOKMAKERS_PARAM}" if BOOKMAKERS_PARAM else "regions=us,eu")
+    url=f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={ODDS_KEY}&{src}&markets={markets}&oddsFormat=american"
     try: return gj(url)
     except Exception as e: print(f"    ! odds fetch failed for {sport_key}: {e}"); return []
 
@@ -229,12 +362,187 @@ def fetch_sharp_and_status(league):
                     if tk: sd[key]['tk'].append(tk)
                     if mn: sd[key]['mn'].append(mn)
                     if ov: sd[key]['od'].append(ov)
+        # Source sweep (roadmap): AN carries per-book pregame ML odds in the SAME free
+        # payload (book ids observed: 15/30/68/69/71). Capture-or-lose; book-id
+        # mapping and timestamp semantics get proven offline (F28/F36) before any
+        # metric uses these. is_live rows are excluded.
+        an_ml={}
+        for bid,mk in g.get('markets',{}).items():
+            for o in (mk.get('event',{}).get('moneyline',[]) or []):
+                if o.get('is_live'): continue
+                sde=o.get('side'); ov=o.get('odds')
+                if sde in ('home','away') and ov:
+                    an_ml.setdefault(str(bid),{})[sde]=ov
         if len(sd)==2:
             sharp[(a,h)]={'splits':{k:{'tickets':statistics.mean(v['tk']) if v['tk'] else 0,
                                        'money':statistics.mean(v['mn']) if v['mn'] else 0,
                                        'odds':statistics.median(v['od']) if v['od'] else None} for k,v in sd.items()},
-                          'num_bets':g.get('num_bets')}
+                          'num_bets':g.get('num_bets'),'an_ml':an_ml or None}
     return sharp, status, raw
+
+def fetch_mlb_context():
+    """F29, LOG-ONLY features from the free keyless MLB Stats API: probable pitchers
+    (ids logged so handedness and every career stat stay reconstructable forever),
+    park, day/night, doubleheader flag, and mlb_gamePk, the master join key into the
+    entire MLB stats universe. Keyed by (away_full_name, home_full_name), the same
+    full-name style the Odds API uses. A join miss is non-fatal (fields stay None)
+    and is counted so silent decay is visible (A8 discipline)."""
+    try:
+        day=datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        d=gj(f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={day}&hydrate=probablePitcher,weather")
+        out={}
+        for dt in (d or {}).get('dates',[]):
+            for g in dt.get('games',[]):
+                aw=g['teams']['away']['team']['name']; hm=g['teams']['home']['team']['name']
+                pa=g['teams']['away'].get('probablePitcher') or {}
+                ph=g['teams']['home'].get('probablePitcher') or {}
+                wx=g.get('weather') or {}
+                out[(aw,hm)]={
+                    'mlb_gamePk':g.get('gamePk'),
+                    'venue':(g.get('venue') or {}).get('name'),
+                    'day_night':g.get('dayNight'),
+                    'double_header':g.get('doubleHeader'),
+                    'probable_away':pa.get('fullName'),'probable_away_id':pa.get('id'),
+                    'probable_home':ph.get('fullName'),'probable_home_id':ph.get('id'),
+                    'wx_condition':wx.get('condition'),'wx_temp_f':wx.get('temp'),'wx_wind':wx.get('wind'),
+                }
+        return out
+    except Exception as e:
+        print(f"    ! MLB Stats context unavailable this run: {e}")
+        return {}
+
+def fetch_prediction_markets(sport_keys):
+    """LOG-ONLY (F39). Free keyless reads of Kalshi + Polymarket game-winner quotes
+    for the active sports. Returns (kalshi_map, poly_map, counts):
+      kalshi_map[frozenset({CODE_A,CODE_B})] -> list of {'teams':{code:{'bid','ask','ticker'}}, 'close':iso}
+      poly_map[(away_full, home_full)] -> {team_full:{'mid','bid','ask'}}
+    Join misses are counted upstream and alarmed, never fatal (A8 discipline)."""
+    kal={}; pol={}; kn=0; pn=0
+    for sk in sport_keys:
+        ser=KALSHI_SERIES.get(sk)
+        if ser:
+            try:
+                d=gj(f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={ser}&status=open&limit=1000")
+                ev={}
+                for m in d.get('markets',[]):
+                    et=m.get('event_ticker') or ''
+                    codes=et.split('-')[-1] if '-' in et else ''
+                    yes=(m.get('ticker') or '').split('-')[-1]
+                    try:
+                        bid=float(m.get('yes_bid_dollars') or 0) or None
+                        ask=float(m.get('yes_ask_dollars') or 0) or None
+                    except Exception: bid=ask=None
+                    if not yes: continue
+                    ev.setdefault(et,{'teams':{},'close':m.get('close_time'),'codes':codes})
+                    ev[et]['teams'][yes]={'bid':bid,'ask':ask,'ticker':m.get('ticker')}
+                for et,e in ev.items():
+                    ks=frozenset(e['teams'].keys())
+                    if len(ks)==2:
+                        kal.setdefault(ks,[]).append(e); kn+=1
+            except Exception as e:
+                print(f"    ! Kalshi fetch failed ({ser}): {e}")
+        tag=POLY_TAGS.get(sk)
+        if tag:
+            try:
+                # NOTE: event startDate is CREATION time (markets open days early),
+                # so filter on the moneyline market's own gameStartTime instead.
+                evs=[]
+                for off in (0,250):
+                    d=gj(f"https://gamma-api.polymarket.com/events?closed=false&tag_slug={tag}&limit=250&offset={off}")
+                    page=d if isinstance(d,list) else d.get('events',d.get('data',[]))
+                    if not page: break
+                    evs+=page
+                    if len(page)<250: break
+                now=datetime.now(timezone.utc)
+                for e in (evs or []):
+                    title=e.get('title') or ''
+                    # main game event title is exactly "Away vs. Home"; derivative
+                    # events append " - Player Props" / " - First 5 Innings Winner"
+                    # and must never masquerade as the game moneyline
+                    if ' vs. ' not in title or ' - ' in title: continue
+                    for mq in e.get('markets',[]):
+                        if mq.get('sportsMarketType')!='moneyline': continue
+                        try:
+                            outs=json.loads(mq.get('outcomes') or '[]')
+                            prs=[float(x) for x in json.loads(mq.get('outcomePrices') or '[]')]
+                        except Exception: continue
+                        if len(outs)!=2 or len(prs)!=2: continue
+                        gst=str(mq.get('gameStartTime') or '')
+                        try:
+                            gdt=datetime.fromisoformat(gst.replace(' ','T').replace('+00','+00:00')) if gst else None
+                        except Exception: gdt=None
+                        if gdt is None or not (-6*3600 < (gdt-now).total_seconds() < 40*3600): continue
+                        bb=mq.get('bestBid'); ba=mq.get('bestAsk')
+                        rec={outs[0]:{'mid':prs[0],'bid':bb,'ask':ba},
+                             outs[1]:{'mid':prs[1],
+                                      'bid':(round(1-ba,3) if isinstance(ba,(int,float)) else None),
+                                      'ask':(round(1-bb,3) if isinstance(bb,(int,float)) else None)}}
+                        pol[(outs[0],outs[1])]=rec; pol[(outs[1],outs[0])]=rec; pn+=1
+                        break
+            except Exception as e:
+                print(f"    ! Polymarket fetch failed ({tag}): {e}")
+    return kal,pol,{'kalshi_events':kn,'poly_games':pn}
+
+def fetch_park_weather(venue_commence):
+    """Feature roadmap #3, LOG-ONLY. One multi-point open-meteo call (free, keyless)
+    for every distinct outdoor/retractable park with a game today; returns
+    venue -> {om_temp_f, om_wind_kph, om_wind_dir_deg} at each game's start hour UTC.
+    Wind-out/wind-in needs a park-orientation azimuth table; deliberately deferred
+    (FUTURE.md) rather than shipping half-guessed bearings. Raw speed/direction plus
+    the roof flag are the honest capture."""
+    try:
+        items=[(v,ct) for v,ct in venue_commence.items() if v in VENUE_GEO]
+        if not items: return {}
+        lats=",".join(str(VENUE_GEO[v][0]) for v,_ in items)
+        lons=",".join(str(VENUE_GEO[v][1]) for v,_ in items)
+        d=gj(f"https://api.open-meteo.com/v1/forecast?latitude={lats}&longitude={lons}"
+             f"&hourly=temperature_2m,wind_speed_10m,wind_direction_10m&forecast_days=2&timezone=UTC")
+        blocks=d if isinstance(d,list) else [d]
+        out={}
+        for (v,ct),blk in zip(items,blocks):
+            try:
+                hh=str(ct)[:13]+":00"
+                times=blk['hourly']['time']; i=times.index(hh) if hh in times else None
+                if i is None: continue
+                out[v]={'om_temp_f':round(blk['hourly']['temperature_2m'][i]*9/5+32,1),
+                        'om_wind_kph':round(blk['hourly']['wind_speed_10m'][i],1),
+                        'om_wind_dir_deg':blk['hourly']['wind_direction_10m'][i]}
+            except Exception: continue
+        return out
+    except Exception as e:
+        print(f"    ! open-meteo unavailable this run: {e}")
+        return {}
+
+def detect_scratches(mlb_ctx, path):
+    """Feature roadmap #2, LOG-ONLY + alarm. Diffs today's probable-pitcher ids
+    against the previous run's stored set (per gamePk, same date only). A probable
+    change between boards is exactly the news window where a retail book lags
+    (AUDIT_TODO F30). Returns {gamePk: 'away'/'home'/'both'}."""
+    today=datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    cur={str(v['mlb_gamePk']):{'a':v.get('probable_away_id'),'h':v.get('probable_home_id'),
+         'an':v.get('probable_away'),'hn':v.get('probable_home')}
+         for v in mlb_ctx.values() if v.get('mlb_gamePk')}
+    prev={}
+    try:
+        if os.path.exists(path):
+            old=json.load(open(path))
+            if old.get('date')==today: prev=old.get('probables',{})
+    except Exception: prev={}
+    scratches={}
+    for pk,c in cur.items():
+        p=prev.get(pk)
+        if not p: continue
+        a_ch=(p.get('a') and c.get('a') and p['a']!=c['a'])
+        h_ch=(p.get('h') and c.get('h') and p['h']!=c['h'])
+        if a_ch or h_ch:
+            scratches[pk]='both' if (a_ch and h_ch) else ('away' if a_ch else 'home')
+            print(f"    ! probable-pitcher CHANGE gamePk {pk}: "
+                  f"{'away '+str(p.get('an'))+' -> '+str(c.get('an')) if a_ch else ''}"
+                  f"{' ' if a_ch and h_ch else ''}"
+                  f"{'home '+str(p.get('hn'))+' -> '+str(c.get('hn')) if h_ch else ''}")
+    try: json.dump({'date':today,'probables':cur}, open(path,'w'))
+    except Exception: pass
+    return scratches
 
 def fetch_scores_for_dates(league, days_back=3):
     """Fetch the Action Network scoreboard for each of the past N days (free, no auth).
@@ -259,6 +567,9 @@ def pin_pair(book_map, a, b):
     return None
 
 def soft_fair_map(odds):
+    """Fair-prob map feeding STEAM detection only. Deliberately still proportional
+    devig: the 1.5pt steam threshold was tuned around proportional numbers (F14).
+    Do not switch this to the power method without retuning the threshold on data."""
     m={}
     for g in odds:
         a,h=g['away_team'],g['home_team']; rows=[]
@@ -282,13 +593,44 @@ def soft_fair_map(odds):
 # ============================ ENGINE ============================
 def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
     away,home=g['away_team'],g['home_team']
-    ml={}; spr={}; tot={}
+    ml={}; spr={}; tot={}; ex_back={}; ex_lay={}
+    pin_lu=None
     for b in g['bookmakers']:
+        if b.get('key')=='pinnacle': pin_lu=b.get('last_update')
+        is_ex=b.get('key') in EXCHANGE_KEYS   # exchanges quote spread, not vig (F27/A9)
         for m in b['markets']:
-            if m['key']=='h2h': ml[b['title']]={o['name']:o['price'] for o in m['outcomes']}
+            if m['key']=='h2h':
+                d={o['name']:o['price'] for o in m['outcomes']}
+                if is_ex: ex_back.update({k:v for k,v in d.items() if k not in ex_back})
+                else: ml[b['title']]=d
+            elif m['key']=='h2h_lay':
+                if is_ex: ex_lay.update({o['name']:o['price'] for o in m['outcomes'] if o['name'] not in ex_lay})
             elif m['key']=='spreads': spr[b['title']]={o['name']:{'pt':o.get('point'),'pr':o['price']} for o in m['outcomes']}
             elif m['key']=='totals': tot[b['title']]={o['name']:{'pt':o.get('point'),'pr':o['price']} for o in m['outcomes']}
     bov_ml=ml.get('Bovada',{})
+    def bo_best(mkt_dict, side, point=None):
+        # Feature roadmap #1, LOG-ONLY: BetOnline.ag price for our side (second
+        # executable offshore venue) and the best vigged-book price at Bovada's
+        # point. Exchanges are already excluded from these dicts (F27), so "best"
+        # means best actually-bettable sportsbook price. Price shopping is worth
+        # roughly 0.5-1.5% EV per bet it improves, with zero model risk.
+        bo=None; best=None; bb=None
+        for t,d in mkt_dict.items():
+            v=d.get(side)
+            if v is None: continue
+            pr=v if not isinstance(v,dict) else (v.get('pr') if (point is None or v.get('pt')==point) else None)
+            if pr is None: continue
+            if t=='BetOnline.ag': bo=pr
+            if best is None or pr>best: best,bb=pr,t
+        return bo,best,bb
+    def ex_mid(side):
+        # Vig-free true-market fair prob: midpoint of back/lay implied probabilities.
+        # LOG-ONLY (F27): never drives decisions until compared against the Pinnacle
+        # anchor on real graded results. Requires both sides of the quote.
+        bk,ly=ex_back.get(side),ex_lay.get(side)
+        if bk is None or ly is None: return None
+        try: return round((am2prob(bk)+am2prob(ly))/2,4)
+        except Exception: return None
     three_way=(sport_kind=='soccer')
     plays=[]
     # ML
@@ -305,13 +647,16 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
         pinp=pin_pair(ml,away,home)
         for s in (away,home):
             pairs=[(dd[s],dd[home if s==away else away]) for dd in ml.values() if away in dd and home in dd]
-            f,fm,n=novig(pairs); anc='consensus'
+            f,fm,n=novig(pairs); anc='consensus'; pp=po=None
             if pinp:
                 pa,pb=(pinp[0],pinp[1]) if s==away else (pinp[1],pinp[0])
-                f=fair_pair(pa,pb); fm=am2prob(pa)/(am2prob(pa)+am2prob(pb)); anc='pinnacle'
+                f=fair_pair(pa,pb); fm=am2prob(pa)/(am2prob(pa)+am2prob(pb)); anc='pinnacle'; pp,po=pa,pb
             if f and s in bov_ml:
                 ev=f*am2dec(bov_ml[s])-1
-                plays.append({'mkt':'ML','side':s,'point':None,'price':bov_ml[s],'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pass':gate(bov_ml[s],ev,n)})
+                _bo,_bp,_bb=bo_best(ml,s)
+                plays.append({'mkt':'ML','side':s,'point':None,'price':bov_ml[s],'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pin_price':pp,'pin_opp':po,
+                              'ex_back':ex_back.get(s),'ex_lay':ex_lay.get(s),'ex_mid':ex_mid(s),
+                              'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(bov_ml[s],ev,n)})
     # Spread (sport-aware) with consensus-favorite data-error guard
     spread_label=SPREAD_LABEL.get(sport_kind); rl_dataerror=False
     bov_spr=spr.get('Bovada',{})
@@ -341,10 +686,12 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
                 f=fair_pair(pinsp[0],pinsp[1]); fm=am2prob(pinsp[0])/(am2prob(pinsp[0])+am2prob(pinsp[1])); anc='pinnacle'
             if f:
                 ev=f*am2dec(bov_fav_pr)-1
-                plays.append({'mkt':'SPR','side':bov_fav,'point':bov_favpt,'price':bov_fav_pr,'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pass':gate(bov_fav_pr,ev,n),'label':spread_label})
+                _bo,_bp,_bb=bo_best(spr,bov_fav,bov_favpt)
+                plays.append({'mkt':'SPR','side':bov_fav,'point':bov_favpt,'price':bov_fav_pr,'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pin_price':(pinsp[0] if pinsp else None),'pin_opp':(pinsp[1] if pinsp else None),'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(bov_fav_pr,ev,n),'label':spread_label})
                 if bov_dog and bov_dog_pr:
                     evd=(1-f)*am2dec(bov_dog_pr)-1
-                    plays.append({'mkt':'SPR','side':bov_dog,'point':bov_dogpt,'price':bov_dog_pr,'fair':1-f,'fair_mult':(1-fm) if fm is not None else None,'ev':evd,'nb':n,'anchor':anc,'pass':gate(bov_dog_pr,evd,n),'label':spread_label})
+                    _bo,_bp,_bb=bo_best(spr,bov_dog,bov_dogpt)
+                    plays.append({'mkt':'SPR','side':bov_dog,'point':bov_dogpt,'price':bov_dog_pr,'fair':1-f,'fair_mult':(1-fm) if fm is not None else None,'ev':evd,'nb':n,'anchor':anc,'pin_price':(pinsp[1] if pinsp else None),'pin_opp':(pinsp[0] if pinsp else None),'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(bov_dog_pr,evd,n),'label':spread_label})
     # Totals
     bov_t=tot.get('Bovada',{})
     if 'Over' in bov_t:
@@ -358,14 +705,35 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
         if pint:
             f=fair_pair(pint[0],pint[1]); fm=am2prob(pint[0])/(am2prob(pint[0])+am2prob(pint[1])); anc='pinnacle'
         if f:
-            for s,fp,fmp,pr in [('Over',f,fm,bov_t['Over']['pr']),('Under',1-f,(1-fm) if fm is not None else None,bov_t['Under']['pr'])]:
+            for s,fp,fmp,pr,pnp,pno in [('Over',f,fm,bov_t['Over']['pr'],(pint[0] if pint else None),(pint[1] if pint else None)),
+                                        ('Under',1-f,(1-fm) if fm is not None else None,bov_t['Under']['pr'],(pint[1] if pint else None),(pint[0] if pint else None))]:
                 ev=fp*am2dec(pr)-1
-                plays.append({'mkt':'TOT','side':s,'point':line,'price':pr,'fair':fp,'fair_mult':fmp,'ev':ev,'nb':n,'anchor':anc,'pass':gate(pr,ev,n)})
+                _bo,_bp,_bb=bo_best(tot,s,line)
+                plays.append({'mkt':'TOT','side':s,'point':line,'price':pr,'fair':fp,'fair_mult':fmp,'ev':ev,'nb':n,'anchor':anc,'pin_price':pnp,'pin_opp':pno,'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(pr,ev,n)})
     passed=[p for p in plays if p['pass']]
     best=max(passed,key=lambda x:x['ev']) if passed else None
     for p in plays: p['fair_am']=prob2am(p['fair'])
     sm=sharp_map.get((away,home))
+    # F23 capture-or-lose: per-book h2h prices + dispersion, persisted in snapshots.
+    # Compact on purpose (h2h only): the fields that make bookmaker-disagreement
+    # features and per-bet EV confidence intervals possible later. Kept off the
+    # betlog to respect snapshot growth limits (F13).
+    books_h2h={t:{k:v for k,v in d.items() if k in (away,home)} for t,d in ml.items() if away in d and home in d}
+    disp=None
+    try:
+        import statistics as _st
+        pa=[am2prob(d[away])/(am2prob(d[away])+am2prob(d[home])) for d in books_h2h.values()]
+        if len(pa)>=2: disp=round(_st.pstdev(pa),4)
+    except Exception: disp=None
+    pin_age_min=None
+    try:
+        if pin_lu:
+            pin_age_min=round((datetime.now(timezone.utc)-datetime.fromisoformat(str(pin_lu).replace('Z','+00:00'))).total_seconds()/60.0,1)
+    except Exception: pin_age_min=None
     return {'away':away,'home':home,'time':g['commence_time'],'event_id':g.get('id'),'plays':plays,'best':best,
+            'pin_age_min':pin_age_min,
+            '_books_h2h':books_h2h,'_h2h_disp':disp,
+            '_ex_back':ex_back if ex_back else None,'_ex_lay':ex_lay if ex_lay else None,
             'sharp':sm if sm else None,'rl_dataerror':rl_dataerror,
             'spread_label':spread_label,'three_way':three_way,
             'status':status_map.get((away,home),{'state':'scheduled','display':None}),
@@ -695,7 +1063,7 @@ function tpStatus(st){
 function amDec(o){o=+o;return o>0?1+o/100:1+100/(-o);}
 function decAm(d){return d>=2?'+'+Math.round((d-1)*100):''+Math.round(-100/(d-1));}
 const GORDER={S:5,A:4,B:3,C:2,D:1};
-const SPORTS=[{key:'mlb',label:'MLB',live:true},{key:'nfl',label:'NFL',live:false,ret:'Sep'},{key:'nba',label:'NBA',live:false,ret:'Oct'},{key:'nhl',label:'NHL',live:false,ret:'Oct'}];
+const SPORTS=__SPORTS_JS__;
 const now=new Date();
 document.getElementById('clock').innerHTML=now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+'<br><span class="lv">● live feed</span>';
 const anySharp=Object.values(ALL).flat().some(c=>c.sharp_grade);
@@ -744,7 +1112,8 @@ function recLine(t){
       if(p.ready) prog=`<span class="tk-ready">✓ Ready for $${p.to}/unit (want ~$${p.bankroll_need} bankroll)</span>`;
       else prog=`<span class="tk-prog">→ $${p.to}/u: ${p.bets_done}/${p.bets_need} bets · ${p.units_done>=0?'+':''}${p.units_done}/${p.units_need}u</span>`;
     }
-    panel.innerHTML=`<div class="tk-row"><span class="tk-l">Tracker</span><span class="tk-rec">${tr.wins}-${tr.losses} · <b class="${tr.units_pl>=0?'pos':'neg'}">${tr.units_pl>=0?'+':''}${tr.units_pl}u (${dollars>=0?'+$':'-$'}${Math.abs(dollars)})</b></span></div><div class="tk-row2">${prog}${tr.concentrated?' <span class="tk-warn">profit concentrated in 1 hit (small sample)</span>':''}${tr.pending?' <span class="tk-pend">'+tr.pending+' pending</span>':''}</div>`;
+    const expo=tr.open_units?` <span class="${tr.open_units>(tr.max_daily_units||6)?'tk-warn':'tk-pend'}">${tr.open_units}u open${tr.open_units>(tr.max_daily_units||6)?' (over '+(tr.max_daily_units||6)+'u guidance)':''}</span>`:'';
+    panel.innerHTML=`<div class="tk-row"><span class="tk-l">Tracker</span><span class="tk-rec">${tr.wins}-${tr.losses} · <b class="${tr.units_pl>=0?'pos':'neg'}">${tr.units_pl>=0?'+':''}${tr.units_pl}u (${dollars>=0?'+$':'-$'}${Math.abs(dollars)})</b></span></div><div class="tk-row2">${prog}${tr.concentrated?' <span class="tk-warn">profit concentrated in 1 hit (small sample)</span>':''}${tr.pending?' <span class="tk-pend">'+tr.pending+' pending</span>':''}${tr.voids?' <span class="tk-pend">'+tr.voids+' void</span>':''}${expo}</div>`;
   }
   host.parentNode.insertBefore(panel, host.nextSibling);
 })();
@@ -796,6 +1165,16 @@ function showView(which){
 }
 
 // ===== Results view (folded-in stats) =====
+function healthStrip(){
+  const rl=(ALL._runlog||[]);
+  if(!rl.length) return '';
+  const last=rl[rl.length-1]; const al=[];
+  if(last.mode==='full'&&!last.odds_games) al.push('odds feed EMPTY');
+  if(last.unmatched) al.push(last.unmatched+' name-join miss');
+  if(last.bov_absent) al.push(last.bov_absent+' game(s) missing Bovada (freeze?)');
+  if(last.ctx_misses) al.push(last.ctx_misses+' MLB-context miss');
+  return `<div class="rcard"><b>Feed health:</b> last run ${last.ts?String(last.ts).slice(0,16).replace('T',' ')+' UTC':'?'} (${last.mode}) · odds ${last.odds_games==null?'-':last.odds_games} games · AN ${last.an_games==null?'-':last.an_games} · logged ${last.plays_logged||0} · closes ${last.closes||0} · graded ${last.graded||0}${al.length?` <span style="color:#e66">! ${al.join(' · ')}</span>`:' · all clear'}</div>`;
+}
 function renderResults(){
   const S=ALL['_stats']||{}; const ud=S.unit_dollars||ALL['_unit_dollars']||10;
   const host=document.getElementById('view-results');
@@ -803,7 +1182,7 @@ function renderResults(){
   const money=(u)=>{const d=Math.round(u*ud);return (u>=0?'+':'')+u+'u ('+(d>=0?'+$':'-$')+Math.abs(d)+')';};
   const cls=(u)=>u>=0?'pos':'neg';
   if(!o.n){
-    host.innerHTML=`<div class="rempty"><h3>No settled bets yet</h3><p>Your results build automatically as recommended games finish. Check back after a few slates.</p></div>
+    host.innerHTML=healthStrip()+`<div class="rempty"><h3>No settled bets yet</h3><p>Your results build automatically as recommended games finish. Check back after a few slates.</p></div>
     <div class="rsect">Raw data</div><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div>
     <div class="rnote">bets.csv = every recommended play and its result. snapshots.csv = each run's readings, for edge-over-time analysis.</div>`;
     return;
@@ -814,11 +1193,20 @@ function renderResults(){
     <div class="rstat"><div class="l">Units</div><div class="v ${cls(o.units_pl)}">${o.units_pl>=0?'+':''}${o.units_pl}</div></div>
     <div class="rstat"><div class="l">ROI</div><div class="v ${cls(o.roi||0)}">${o.roi==null?'-':o.roi+'%'}</div></div>
     <div class="rstat"><div class="l">Profit</div><div class="v ${cls(o.units_pl)}">${o.dollars>=0?'+$':'-$'}${Math.abs(o.dollars)}</div></div>
-  </div><div class="rnote">${o.pending||0} bets still pending. $${ud}/unit.</div>`;
-  if(S.clv&&S.clv.n){
+  </div><div class="rnote">${o.pending||0} bets still pending.${o.voids?` ${o.voids} voided (postponed/cancelled, refunded like a book would).`:''}${o.pushes?` ${o.pushes} pushed.`:''} $${ud}/unit.</div>`;
+  if(S.clv&&S.clv.n_graded){
     const c=S.clv;
-    h+=`<div class="rcard"><b>Closing line value:</b> avg <span class="${c.avg>=0?'pos':'neg'}">${c.avg>=0?'+':''}${c.avg}%</span> across ${c.n} bets · beat the close ${c.pos_pct}% of the time.<div class="rnote">CLV is the fastest honest signal. Consistently positive CLV over 50+ bets means the picks beat the market even before wins and losses stabilize; negative CLV with a winning record means the record is luck. (Close = last pregame price this tool saw, an approximation given the run schedule.)</div></div>`;
+    const pct=(v)=>v==null?'-':`<span class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v}%</span>`;
+    h+=`<div class="rcard"><b>Closing line value:</b> EV at close avg ${pct(c.fair_avg)} (positive ${c.fair_pos==null?'-':c.fair_pos+'%'} of ${c.fair_n}) · price CLV avg ${pct(c.avg)} (beat the close ${c.pos_pct==null?'-':c.pos_pct+'%'} of ${c.n}).<div class="rnote">EV at close = the entry price scored against the devigged, Pinnacle-anchored fair probability at the last pregame observation: the market's final verdict on each bet, and the headline metric. Price CLV = entry vs the last Bovada price, same-book line movement. Coverage: ${c.n_measured} of ${c.n_graded} graded plays had a post-entry close observation${c.coverage==null?'':' ('+c.coverage+'%)'}; the rest are excluded, not counted as zero. The close is still the last reading this tool saw, an approximation given the run schedule.</div></div>`;
   }
+  h+=healthStrip();
+  const evr=s.ev_real;
+  if(evr&&evr.n){ h+=`<div class="rcard"><b>Expected vs realized:</b> stated EV summed to ${evr.exp>0?'+':''}${evr.exp}u across ${evr.n} settled bets; reality delivered ${evr.act>0?'+':''}${evr.act}u (gap ${evr.gap>0?'+':''}${evr.gap}u).<div class="rnote">A persistently large negative gap means stated edges are inflated. Meaningless before ~50 bets.</div></div>`; }
+  const cr=s.clv_roll;
+  if(cr&&cr.n>=10){ h+=`<div class="rcard"><b>Drift check:</b> EV-at-close rolling last ${cr.win}: ${pct(cr.roll)} vs cumulative ${pct(cr.cum)} (n=${cr.n}).<div class="rnote">Rolling far below cumulative suggests the edge is decaying or the market adapted (item 17).</div></div>`; }
+  const cs=s.clv_seg;
+  if(cs&&cs.rows&&cs.rows.length&&s.clv&&s.clv.fair_n>=10){ h+=`<div class="rcard"><b>EV-at-close by segment</b> <span class="rnote">(exploratory only; the pre-registered endpoint is the overall number)</span>${cs.rows.map(r=>`<div class="rnote">${r.k}: ${pct(r.avg)} (n=${r.n})</div>`).join('')}</div>`; }
+  h+=`<div class="rcard"><b>What normal variance looks like</b> (simulation at this tool's price and stake profile, 20k trials of 100 bets): even a model with a REAL +3.5% edge hits a median max drawdown of ~15u and an 8-loss streak, and still finishes negative about 40% of the time; a no-edge model lands anywhere in roughly -26u to +26u. At this sample size, judge the model on EV at close and CLV, not on the W/L record.</div>`;
   h+=`<div class="rsect">By stated EV</div>`+simpleTbl(S.by_ev);
   // by grade
   h+=`<div class="rsect">By sharp grade</div>`+gradeTbl(S.by_grade);
@@ -883,10 +1271,13 @@ def grade_sharp(splits, soft_fair_game, num_bets=None, is_early_week=False, spor
     tickets=splits[sharp_side]['tickets'] or 0; money=splits[sharp_side]['money'] or 0
     if gap<th['D']: return None
     contrarian=tickets<=35
-    steam=False
+    steam=False; steam_delta=None
     sf=soft_fair_game.get(sharp_side) if soft_fair_game else None
     odds=splits[sharp_side].get('odds')
-    if sf is not None and odds is not None and am2prob(odds)>sf+0.015: steam=True
+    if sf is not None and odds is not None:
+        _raw=(am2prob(odds)-sf)*100                   # pts of implied prob vs soft fair
+        steam_delta=round(_raw,1)
+        if _raw>1.5: steam=True                       # same threshold as before, unrounded
     # percentile-anchored, sport-specific: S/A require the tail AND contrarian confirmation
     if gap>=th['S'] and contrarian and steam: grade='S'
     elif (gap>=th['A'] and contrarian) or (gap>=th['S']): grade='A'
@@ -897,7 +1288,8 @@ def grade_sharp(splits, soft_fair_game, num_bets=None, is_early_week=False, spor
     thin=(num_bets is not None and num_bets<1500); capped=False
     if (thin or is_early_week) and grade in ('S','A'): grade='B'; capped=True
     return {'side':sharp_side,'grade':grade,'gap':round(gap,1),'tickets':round(tickets),'money':round(money),
-            'contrarian':contrarian,'steam':steam,'capped':capped,'thin':thin}
+            'contrarian':contrarian,'steam':steam,'steam_delta':steam_delta,'num_bets':num_bets,
+            'capped':capped,'thin':thin}
 
 def am_str(o): o=int(round(float(o))); return ('+'+str(o)) if o>0 else str(o)
 def pt_str(pt):
@@ -947,6 +1339,10 @@ def build_recommendation(c, sg):
         cross=''
         if agree and v['mkt']!='ML': cross=f" (sharp money backs {sg['side']} to win; this {mlabel.lower()} is the value angle on the same side)"
         return {'type':'value','market':mlabel,'side':str(v['side']),'point':v.get('point'),'price':v['price'],
+                'fair':v.get('fair'),'fair_mult':v.get('fair_mult'),'anchor':v.get('anchor'),'nb':v.get('nb'),
+                'pin_price':v.get('pin_price'),'pin_opp':v.get('pin_opp'),
+                'ex_back':v.get('ex_back'),'ex_lay':v.get('ex_lay'),'ex_mid':v.get('ex_mid'),
+                'bo_price':v.get('bo_price'),'best_price':v.get('best_price'),'best_book':v.get('best_book'),
                 'text':f"{mlabel} · {sidetxt} at {am_str(v['price'])}",
                 'why':("Value + sharp agree: double-down." if agree else "Value bet (price beats fair value).")+cross,
                 'double':bool(agree)}
@@ -956,7 +1352,13 @@ def build_recommendation(c, sg):
         if sp and sp.get('price') is not None: alts.append({'market':c.get('spread_label') or 'Spread','point':sp.get('point'),'price':sp['price']})
         if alts:
             p0=alts[0]; pt=pt_str(p0['point']); sidetxt=f"{sg['side']} {pt}".strip()
+            src=ml if (ml and ml.get('price') is not None) else sp   # play the rec is priced from
             return {'type':'sharp','market':p0['market'],'side':sg['side'],'point':p0['point'],'price':p0['price'],
+                    'fair':(src or {}).get('fair'),'fair_mult':(src or {}).get('fair_mult'),
+                    'anchor':(src or {}).get('anchor'),'nb':(src or {}).get('nb'),
+                    'pin_price':(src or {}).get('pin_price'),'pin_opp':(src or {}).get('pin_opp'),
+                    'ex_back':(src or {}).get('ex_back'),'ex_lay':(src or {}).get('ex_lay'),'ex_mid':(src or {}).get('ex_mid'),
+                    'bo_price':(src or {}).get('bo_price'),'best_price':(src or {}).get('best_price'),'best_book':(src or {}).get('best_book'),
                     'text':f"{p0['market']} · {sidetxt} at {am_str(p0['price'])}",
                     'why':"Sharp signal is moneyline-based, so the ML is the cleanest expression. Alt markets shown if you want a different risk/reward.",
                     'alts':alts,'double':False}
@@ -983,10 +1385,18 @@ def load_log(path):
 def save_log(path, log): json.dump(log, open(path,'w'), indent=2, default=str)
 def log_plays(path, recs):
     log=load_log(path); existing={_bkey(p) for p in log['plays']}
+    # One play per game: build_recommendation names ONE market per game, but the rec
+    # can flip (ML in the morning, total in the afternoon) as prices move. Without this
+    # guard both would log under different keys: correlated double exposure on one game
+    # and a double-counted result. First logged play wins; later flips are skipped.
+    open_events={p.get('event_id') for p in log['plays'] if p.get('result') is None and p.get('event_id')}
     today=datetime.now(timezone.utc).strftime('%Y-%m-%d'); added=0
     for r in recs:
         p=dict(r); p['date']=today; p['result']=None; p['units_pl']=None
-        if _bkey(p) not in existing: log['plays'].append(p); existing.add(_bkey(p)); added+=1
+        if p.get('event_id') and p['event_id'] in open_events: continue
+        if _bkey(p) not in existing:
+            log['plays'].append(p); existing.add(_bkey(p)); added+=1
+            if p.get('event_id'): open_events.add(p['event_id'])
     save_log(path, log); return added
 def _grade_one(p, res):
     """Returns 'win' / 'loss' / 'push' / None (None = cannot grade). Pushes MUST be
@@ -1057,19 +1467,56 @@ def grade_pending(path, results):
         p['result']=outcome
         pr=float(p['price']); dec=am2dec(pr); u=float(p['units'])
         p['units_pl']=0.0 if outcome=='push' else (round(u*(dec-1),2) if outcome=='win' else round(-u,2)); n+=1
-        # closing line value: how our entry price compares to the last pregame price seen.
-        # Positive CLV = we beat the close. This converges on truth 10x faster than W/L.
+        # Closing line value, two flavors:
+        # clv      = entry price vs the last pregame BOVADA price seen (same-book line movement).
+        # clv_fair = stated-EV formula re-run with the CLOSING fair probability (devigged,
+        #            Pinnacle-anchored when available): the market's final verdict on the
+        #            bet's EV. This answers "should CLV be measured vs Pinnacle?" correctly,
+        #            in probability space, instead of mixing two books' vigged prices.
+        # clv_measured = True only if at least one post-entry pregame observation updated
+        # the close. Plays are seeded with close=entry at log time so nothing is ever
+        # silently dropped, but seeded values carry no information: stats exclude them.
         cp=p.get('close_price')
         if cp is not None:
             try: p['clv']=round((am2dec(p['price'])/am2dec(cp)-1)*100,2)
             except Exception: p['clv']=None
+        cf=p.get('close_fair')
+        if cf is not None:
+            try: p['clv_fair']=round((float(cf)*am2dec(p['price'])-1)*100,2)
+            except Exception: p['clv_fair']=None
+        p['clv_measured']=bool((p.get('close_obs') or 0)>0)
+    # Void pass: a play still pending 72h after its scheduled start is voided.
+    # The score backfill covers 3 days; if that window produced no matchable final,
+    # the game was postponed, cancelled, or rescheduled outside the 6h match window.
+    # Sportsbooks void (refund) such bets, so 'void' mirrors real settlement:
+    # units_pl 0, excluded from the record like pushes. Without this, a rainout
+    # sits pending forever, polluting the pending count and open-exposure total.
+    now=datetime.now(timezone.utc)
+    for p in log['plays']:
+        if p.get('result') is not None: continue
+        age_from=None
+        try:
+            age_from=datetime.fromisoformat(str(p.get('commence')).replace('Z','+00:00'))
+        except Exception:
+            try:
+                # legacy play without commence: age off the log date plus a day of margin
+                age_from=datetime.strptime(p['date'],'%Y-%m-%d').replace(tzinfo=timezone.utc)+timedelta(hours=24)
+            except Exception:
+                continue
+        if now-age_from>timedelta(hours=72):
+            p['result']='void'; p['units_pl']=0.0
+            p['void_reason']='no matchable final within 72h of scheduled start (postponed, cancelled, or rescheduled)'
+            n+=1
     save_log(path, log); return n
 
 MARKET_TO_MKT={'moneyline':'ML','run line':'SPR','spread':'SPR','asian handicap':'SPR','puck line':'SPR','total':'TOT'}
 def update_closes(path, allc):
-    """While a logged bet's game is still pregame, keep refreshing close_price with the
-    latest Bovada price for the same market/side/point. The stored value is the last
-    pregame price we saw: an honest approximation of the close given the run schedule.
+    """While a logged bet's game is still pregame, keep refreshing close_price (Bovada,
+    same market/side/point) and close_fair (devigged fair prob, Pinnacle-anchored when
+    available) with the latest observation. The stored value is the last pregame reading
+    we saw: an honest approximation of the close given the run schedule. Plays are
+    SEEDED with close=entry at log time; close_obs counts post-entry observations, and
+    only close_obs>0 plays count as measured CLV (seeded values carry no information).
 
     Two guards matter here:
     1. Pregame is checked by the CLOCK (commence_time in the future), not only the
@@ -1100,10 +1547,34 @@ def update_closes(path, allc):
             if pl['mkt']==want and str(pl['side'])==str(p['side']):
                 same_pt=(pl.get('point')==p.get('point')) or (want=='ML')
                 if same_pt and pl.get('price') is not None:
-                    p['close_price']=pl['price']; touched+=1
+                    p['close_price']=pl['price']
+                    # the closing FAIR probability (devigged, Pinnacle-anchored when
+                    # available) powers clv_fair, the market's final EV verdict
+                    if pl.get('fair') is not None:
+                        p['close_fair']=pl['fair']; p['close_anchor']=pl.get('anchor')
+                    p['close_point']=pl.get('point')
+                    p['close_ts']=datetime.now(timezone.utc).isoformat()
+                    p['close_obs']=int(p.get('close_obs') or 0)+1
+                    touched+=1
+                elif pl.get('point') is not None:
+                    # Bovada moved the line off our entry point: the same-line close
+                    # freezes (prices at different lines are not comparable), but record
+                    # where the line went so the movement itself is not lost forever.
+                    p['close_line_moved']=pl.get('point')
                 break
     if touched: save_log(path, log)
     return touched
+def append_runlog(path, entry, keep=500):
+    """Per-run health record (item 13): tiny append-only file, trimmed to the last
+    500 runs (~5 months at 3/day) to respect the F13 whole-file-rewrite pattern.
+    Feeds the dashboard health strip; never contains plays or prices."""
+    try: rl=json.load(open(path)) if os.path.exists(path) else {'runs':[]}
+    except Exception: rl={'runs':[]}
+    runs=(rl.get('runs') or [])[-(keep-1):]
+    runs.append(entry); rl['runs']=runs
+    json.dump(rl, open(path,'w'))
+    return runs
+
 def tracker_summary(path, current_unit):
     log=load_log(path)
     settled=[p for p in log['plays'] if p.get('result') in ('win','loss')]
@@ -1117,9 +1588,12 @@ def tracker_summary(path, current_unit):
         progress={'to':nxt['to'],'bets_done':n,'bets_need':nxt['min_bets'],
                   'units_done':units_pl,'units_need':nxt['min_units'],'bankroll_need':nxt['min_bankroll'],
                   'ready':(n>=nxt['min_bets'] and units_pl>=nxt['min_units'] and not concentrated)}
+    pend=[p for p in log['plays'] if p.get('result') is None]
+    open_units=round(sum(float(p.get('units') or 0) for p in pend),2)
     return {'n':n,'wins':wins,'losses':n-wins,'units_pl':units_pl,
             'pushes':len([p for p in log['plays'] if p.get('result')=='push']),
-            'pending':len([p for p in log['plays'] if p.get('result') is None]),
+            'voids':len([p for p in log['plays'] if p.get('result')=='void']),
+            'pending':len(pend),'open_units':open_units,'max_daily_units':MAX_DAILY_UNITS,
             'concentrated':concentrated,'progress':progress,'current_unit':current_unit}
 
 def collect_results(sharp_raw_by_league):
@@ -1152,19 +1626,40 @@ def hours_until(iso):
     except: return None
 
 def log_snapshots(path, allc):
-    """Append one row per MLB game that has a sharp grade this run."""
+    """Append one row per game that has a sharp grade this run. F13/F41: the live
+    file holds ONLY the current month (rewritten each run, bounded size); at each
+    month boundary, prior-month rows roll to <path stem>_YYYY-MM.json, written once
+    and never rewritten. Nothing is ever deleted. Every row carries model_version
+    so any future analysis can segment snapshot-derived features by model era."""
     snaps=[]
     if os.path.exists(path):
         try: snaps=json.load(open(path)).get('snaps',[])
         except: snaps=[]
     run_ts=datetime.now(timezone.utc).isoformat()
+    cur_month=run_ts[:7]
+    old_rows=[r for r in snaps if str(r.get('run_ts',''))[:7]!=cur_month]
+    if old_rows:
+        try:
+            by_m={}
+            for r in old_rows: by_m.setdefault(str(r.get('run_ts',''))[:7] or 'unknown',[]).append(r)
+            for m,rows in by_m.items():
+                ap=path.replace('.json','')+f'_{m}.json'
+                existing=[]
+                if os.path.exists(ap):
+                    try: existing=json.load(open(ap)).get('snaps',[])
+                    except: existing=[]
+                json.dump({'snaps':existing+rows}, open(ap,'w'))
+            snaps=[r for r in snaps if str(r.get('run_ts',''))[:7]==cur_month]
+            print(f"    snapshots: rolled {len(old_rows)} prior-month row(s) to archive")
+        except Exception as e:
+            print(f"    ! snapshot rotation skipped: {e}")
     for sport,cards in allc.items():
         if sport.startswith('_'): continue
         for c in cards:
             sg=c.get('sharp_grade')
             if not sg: continue
             snaps.append({
-                'run_ts':run_ts,'sport':sport,'game':f"{c['away']} @ {c['home']}",
+                'run_ts':run_ts,'model_version':MODEL_VERSION,'sport':sport,'game':f"{c['away']} @ {c['home']}",
                 'away':c['away'],'home':c['home'],'commence':c['time'],
                 'hours_to_game':hours_until(c['time']),
                 'sharp_side':sg['side'],'grade':sg['grade'],'gap':sg['gap'],
@@ -1176,9 +1671,15 @@ def log_snapshots(path, allc):
                 'rec_side':(c.get('rec') or {}).get('side'),
                 'ev':(c.get('value_play') or {}).get('ev'),
                 'fair':(c.get('value_play') or {}).get('fair'),
+                'fair_mult':(c.get('value_play') or {}).get('fair_mult'),
+                'nb':(c.get('value_play') or {}).get('nb'),
                 'anchor':(c.get('value_play') or {}).get('anchor'),
                 'event_id':c.get('event_id'),
                 'units':c.get('units'),
+                'books_h2h':c.get('_books_h2h'),'h2h_disp':c.get('_h2h_disp'),
+                'an_ml':(c.get('sharp') or {}).get('an_ml'),
+                'ex_back':c.get('_ex_back'),'ex_lay':c.get('_ex_lay'),
+                'ml_ex_mid':next((p.get('ex_mid') for p in c.get('plays',[]) if p['mkt']=='ML' and p.get('ex_mid') is not None),None),
             })
     json.dump({'snaps':snaps}, open(path,'w'), default=str)
     return len(snaps)
@@ -1229,6 +1730,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
     overall=agg(settled)
     overall['pending']=len([p for p in log['plays'] if p.get('result') is None])
     overall['pushes']=len([p for p in log['plays'] if p.get('result')=='push'])
+    overall['voids']=len([p for p in log['plays'] if p.get('result')=='void'])
     # cumulative units over time (by date)
     from collections import OrderedDict
     cum=OrderedDict(); running=0.0
@@ -1248,16 +1750,61 @@ def compute_stats(log_path, snap_path, unit_dollars):
         edge_time={k:round(sum(v)/len(v),1) for k,v in b.items() if v}
     # CLV: the fastest truth-teller. Positive average CLV over 50+ bets is the
     # strongest evidence of a real edge, long before W/L stabilizes.
-    clvs=[r['clv'] for r in log['plays'] if r.get('clv') is not None and r.get('result') is not None]
-    clv={'n':len(clvs),
+    # Only MEASURED closes count (at least one post-entry pregame observation);
+    # entry-seeded closes are excluded, NOT averaged in as zeros, which would
+    # dilute the metric toward 0 and quietly hide the coverage problem.
+    graded_all=[p for p in log['plays'] if p.get('result') is not None]
+    def _measured(p):
+        if 'clv_measured' in p: return bool(p.get('clv_measured'))
+        return p.get('clv') is not None   # legacy plays: close was only ever set post-entry
+    meas=[p for p in graded_all if _measured(p)]
+    clvs=[p['clv'] for p in meas if p.get('clv') is not None]
+    fairs=[p['clv_fair'] for p in meas if p.get('clv_fair') is not None]
+    clv={'n_graded':len(graded_all),'n_measured':len(meas),
+         'coverage':round(100*len(meas)/len(graded_all)) if graded_all else None,
+         'n':len(clvs),
          'avg':round(sum(clvs)/len(clvs),2) if clvs else None,
-         'pos_pct':round(100*sum(1 for c in clvs if c>0)/len(clvs)) if clvs else None}
+         'pos_pct':round(100*sum(1 for c in clvs if c>0)/len(clvs)) if clvs else None,
+         'fair_n':len(fairs),
+         'fair_avg':round(sum(fairs)/len(fairs),2) if fairs else None,
+         'fair_pos':round(100*sum(1 for c in fairs if c>0)/len(fairs)) if fairs else None}
+    # Expected vs realized (item 13): the earliest read on whether stated edges are
+    # inflated. Settled only; voided bets never had money at risk.
+    evs=[p for p in settled if p.get('ev') is not None and p.get('units')]
+    ev_real=None
+    if evs:
+        exp=round(sum(float(p['units'])*float(p['ev']) for p in evs),2)
+        act=round(sum(p.get('units_pl') or 0 for p in evs),2)
+        ev_real={'n':len(evs),'exp':exp,'act':act,'gap':round(act-exp,2)}
+    # Rolling EV-at-close vs cumulative (item 17 decay detection), measured plays only,
+    # ordered by date then run_ts
+    fair_seq=[x[2] for x in sorted((p.get('date') or '', p.get('run_ts') or '', p['clv_fair'])
+              for p in meas if p.get('clv_fair') is not None)]
+    WIN=20
+    clv_roll=({'n':len(fair_seq),'win':min(WIN,len(fair_seq)),
+               'roll':round(sum(fair_seq[-WIN:])/len(fair_seq[-WIN:]),2),
+               'cum':round(sum(fair_seq)/len(fair_seq),2)} if fair_seq else None)
+    # Segment means (EXPLORATORY: pre-registered primary endpoint is overall clv_fair;
+    # segments are hypothesis generators, never victory conditions, see AUDIT_TODO F32)
+    def _seg(keyfn):
+        d={}
+        for p in meas:
+            if p.get('clv_fair') is None: continue
+            k=keyfn(p)
+            if k: d.setdefault(k,[]).append(p['clv_fair'])
+        return [{'k':k,'n':len(v),'avg':round(sum(v)/len(v),2)} for k,v in sorted(d.items())]
+    def _run_hr(p):
+        ts=p.get('run_ts') or ''
+        return (ts[11:13]+':xx UTC run') if len(ts)>=13 else None
+    _sports_present={p.get('sport') for p in meas if p.get('sport')}
+    clv_seg={'rows':(_seg(lambda p:(p.get('sport') or '').upper() or None) if len(_sports_present)>1 else [])
+                    +_seg(lambda p:p.get('market'))+_seg(_run_hr)}
     def ev_bucket(r):
         e=r.get('ev')
         if e is None: return 'sharp only (no price edge)'
         return '3-5%' if e<0.05 else '5-8%' if e<0.08 else '8%+'
     return {'overall':overall,
-            'clv':clv,
+            'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,
             'by_ev':by(ev_bucket, order=['3-5%','5-8%','8%+','sharp only (no price edge)']),
             'by_grade':by(lambda r:r.get('grade'), order=['S','A','B','C','D']),
             'by_units':by(lambda r:f"{r.get('units')}u"),
@@ -1280,10 +1827,17 @@ def main():
         print("  !! No Odds API key found. Set the ODDS_KEY env var (GitHub secret) or put")
         print("     the key in odds_key.txt next to this script for local runs.\n")
     allc={}
+    run_odds_games=0; run_an_games=0; run_unmatched=0; run_bov_absent=0
+    _asp=active_sports()
+    _per_full=(3 if BOOKMAKERS_PARAM else 6); _per_close=(1 if BOOKMAKERS_PARAM else 2)
+    _proj=len(_asp)*(2*_per_full+_per_close)*30
+    if _proj>PLAN_CREDITS:
+        print(f"  !! CREDIT WARNING: {len(_asp)} active sport(s) at 2 full + 1 close/day projects ~{_proj}/month vs plan {PLAN_CREDITS}. Fix: fewer sports, RS_BOOKMAKERS after the F26 curl, or the $30 20K plan (set PLAN_CREDITS=20000).")
     raw_payloads=[]
-    for key, skey, kind, an in SPORTS:
+    for sp in active_sports():
+        key, skey, kind, an = sp['key'], sp['odds'], sp['kind'], sp['an']
         print(f"  [{key.upper()}] odds...", end=" ", flush=True)
-        odds=fetch_odds(skey)
+        odds=fetch_odds(skey, markets=("h2h" if RUN_MODE=='close' else "h2h,spreads,totals"))
         print(f"{len(odds)} games", end="")
         sharp_map, status_map, raw = fetch_sharp_and_status(an)
         if raw: raw_payloads.append(raw)
@@ -1305,8 +1859,51 @@ def main():
             c.pop('_sharp_raw',None); c.pop('_soft_fair',None)
             cards.append(c)
         allc[key]=cards
+        run_odds_games+=len(cards); run_an_games+=len(sharp_map)
+        # Bovada listed nothing while the consensus priced the game: a line freeze or
+        # suspension marker (item 16); alarmed on the health strip, logged in the runlog
+        run_bov_absent+=sum(1 for c in cards if c.get('_books_h2h') and 'Bovada' not in c['_books_h2h'])
         g_ct=sum(1 for c in cards if c['sharp_grade'])
         print(f"  ·  {g_ct} sharp-graded")
+        # Name-join alarm: the two APIs are joined on (away, home) full names. A silent
+        # mismatch (a team rename, an "Athletics" style change) kills sharp data AND
+        # grading for that team with no symptom. Only scheduled AN games should exist
+        # in the odds feed, so alarm on those; finished games dropping out is normal.
+        odds_keys={(c['away'],c['home']) for c in cards}
+        unmatched=[k for k in sharp_map if k not in odds_keys and (status_map.get(k) or {}).get('state')=='scheduled'] if cards else []
+        if unmatched:
+            print(f"    ! name-join alarm: {len(unmatched)} AN game(s) with splits matched no Odds API game: {unmatched}")
+        run_unmatched+=len(unmatched)
+    # ---- persistence paths + one-time migration (both run modes need these) ----
+    log_path=os.path.join(here, "ridgeseeker_betlog.json")
+    snap_path=os.path.join(here, "ridgeseeker_snapshots.json")
+    runlog_path=os.path.join(here, "ridgeseeker_runlog.json")
+    # one-time migration: adopt the old EdgeFinder files so no history is lost
+    for old,new in [("edgefinder_betlog.json",log_path),("edgefinder_snapshots.json",snap_path)]:
+        op=os.path.join(here,old)
+        if os.path.exists(op) and not os.path.exists(new):
+            try:
+                import shutil; shutil.copyfile(op,new); print(f"  (migrated {old} -> {os.path.basename(new)})")
+            except Exception as e: print(f"  ! migration failed for {old}: {e}")
+
+    # ---- close-capture mode: refresh closes + grade, then stop ----
+    # Cheap run (h2h only, 2 credits) fired shortly before the evening slate so night
+    # games get a close observation much nearer first pitch, and plays logged at the
+    # 21:30 run get a close at all. Never logs plays (an h2h-only board would bias
+    # play selection), never snapshots (keeps the edge-over-time cadence clean),
+    # never rebuilds the dashboard. Spread/total closes freeze at the last full-run
+    # observation in this mode; that is deliberate and labeled in the docs.
+    if RUN_MODE=='close':
+        touched=update_closes(log_path, allc)
+        graded=grade_pending(log_path, collect_results(raw_payloads))
+        append_runlog(runlog_path, {'ts':datetime.now(timezone.utc).isoformat(),'mode':'close',
+            'model_version':MODEL_VERSION,'odds_games':run_odds_games,'an_games':run_an_games,
+            'unmatched':run_unmatched,'bov_absent':run_bov_absent,'ctx_misses':None,
+            'plays_logged':0,'closes':touched,'graded':graded})
+        print(f"\nClose-capture run done: refreshed {touched} close(s), graded {graded} bet(s).")
+        print("No plays logged, no dashboard rebuilt (h2h only, 2 API credits).")
+        return
+
     # build _top
     GORD={'S':5,'A':4,'B':3,'C':2,'D':1,None:0}
     top=[]
@@ -1325,39 +1922,174 @@ def main():
     allc['_top']=top
 
     # ---- results tracker ----
-    log_path=os.path.join(here, "ridgeseeker_betlog.json")
-    snap_path=os.path.join(here, "ridgeseeker_snapshots.json")
-    # one-time migration: adopt the old EdgeFinder files so no history is lost
-    for old,new in [("edgefinder_betlog.json",log_path),("edgefinder_snapshots.json",snap_path)]:
-        op=os.path.join(here,old)
-        if os.path.exists(op) and not os.path.exists(new):
-            try:
-                import shutil; shutil.copyfile(op,new); print(f"  (migrated {old} -> {os.path.basename(new)})")
-            except Exception as e: print(f"  ! migration failed for {old}: {e}")
     # 0. refresh close prices for pending pregame bets (CLV needs the last pregame price)
-    update_closes(log_path, allc)
+    touched=update_closes(log_path, allc)
     # 1. grade any pending bets we now have final scores for
     results=collect_results(raw_payloads)
     graded=grade_pending(log_path, results)
     # 2. log today's recommended plays with full feature set (grade, gap, hours-to-game)
     todays=[]
+    now_iso=datetime.now(timezone.utc).isoformat()
+    mlb_ctx=fetch_mlb_context()   # F29 log-only features, free, one keyless call
+    ctx_misses=0
+    probables_path=os.path.join(here, "ridgeseeker_probables.json")
+    scratches=detect_scratches(mlb_ctx, probables_path) if mlb_ctx else {}
+    _vc={}
+    for _v in mlb_ctx.values():
+        if _v.get('venue') and _v.get('mlb_gamePk'):
+            _vc.setdefault(_v['venue'], None)
+    # per-venue commence: earliest game at that venue today (weather at start hour)
     for t in top:
-        if t.get('units') and t.get('rec') and (t.get('status') or {}).get('state') in (None,'scheduled'):
+        _cx=mlb_ctx.get((t['away'],t['home']))
+        if _cx and _cx.get('venue') and _vc.get(_cx['venue']) is None:
+            _vc[_cx['venue']]=t['time']
+    wx=fetch_park_weather({v:c for v,c in _vc.items() if c}) if _vc else {}
+    pm_kal,pm_pol,pm_counts=fetch_prediction_markets([sp['key'] for sp in _asp])
+    pm_miss=0; stale_skips=0; news_skips=0
+    for t in top:
+        # Pregame is checked by the CLOCK, not only the AN status feed (state is None
+        # for every game when AN is down, and a delayed or manual run mid-slate would
+        # otherwise log LIVE in-play prices as pregame entries: same bug class F6
+        # fixed for closes, now guarded at entry where the money decision is made).
+        if t.get('units') and t.get('rec') and (t.get('status') or {}).get('state') in (None,'scheduled') and (hours_until(t['time']) or 0)>0:
             r=t['rec']; sg=t.get('sg') or {}
-            todays.append({'away':t['away'],'home':t['home'],'sport':t['sport'],
+            # fair/anchor: the value play's when there is one, else the rec's own side
+            # (previously sharp-only plays logged fair=None even though it was computed:
+            # a capture-now-or-lose-forever field)
+            fair=t.get('fair') if t.get('fair') is not None else r.get('fair')
+            fmult=t.get('fair_mult') if t.get('fair_mult') is not None else r.get('fair_mult')
+            anchor=t.get('anchor') if t.get('anchor') is not None else r.get('anchor')
+            play={'away':t['away'],'home':t['home'],'sport':t['sport'],
                            'market':r['market'],'side':str(r['side']),'point':r.get('point'),
-                           'price':r['price'],'units':t['units'],
+                           'price':r['price'],'units':t['units'],'units_reason':t.get('units_reason'),
+                           'rec_type':r.get('type'),
                            'grade':t.get('grade'),'gap':sg.get('gap'),
+                           'tickets':sg.get('tickets'),'money':sg.get('money'),
+                           'num_bets':sg.get('num_bets'),
                            'contrarian':sg.get('contrarian'),'steam':sg.get('steam'),
+                           'steam_delta':sg.get('steam_delta'),
                            'has_value':t.get('has_value'),
-                           'ev':t.get('ev'),'fair':t.get('fair'),'fair_mult':t.get('fair_mult'),
-                           'anchor':t.get('anchor'),
+                           'ev':t.get('ev'),'fair':fair,'fair_mult':fmult,'anchor':anchor,
+                           'nb':r.get('nb'),'pin_price':r.get('pin_price'),'pin_opp':r.get('pin_opp'),
+                           'ex_back':r.get('ex_back'),'ex_lay':r.get('ex_lay'),'ex_mid':r.get('ex_mid'),
+                           'bo_price':r.get('bo_price'),'best_price':r.get('best_price'),'best_book':r.get('best_book'),
                            'commence':t['time'],'event_id':t.get('event_id'),
-                           'model_version':MODEL_VERSION,'close_price':None,'clv':None,
-                           'hours_to_game':hours_until(t['time'])})
-    added=log_plays(log_path, todays)
+                           'model_version':MODEL_VERSION,'run_ts':now_iso,
+                           # close fields SEEDED with the entry snapshot so every play can
+                           # be graded for CLV; close_obs counts post-entry observations
+                           # and only close_obs>0 counts as measured (see update_closes)
+                           'close_price':r['price'],'close_fair':fair,'close_anchor':anchor,
+                           'close_point':r.get('point'),'close_ts':now_iso,'close_obs':0,
+                           'clv':None,'clv_fair':None,
+                           'hours_to_game':hours_until(t['time'])}
+            # Research-pass suppressions (v14, MODEL_VERSION bump): (a) a VALUE rec
+            # anchored on a stale Pinnacle quote is a phantom-edge candidate: label
+            # it on the board and do NOT log it; (b) any rec on a game whose probable
+            # pitcher changed THIS run sits out one cycle: the market is mid-move on
+            # news and our anchor may itself be stale (information-window rule).
+            _skip=None
+            if scratches and str(play.get('mlb_gamePk')) in scratches:
+                _skip='news'
+            elif r.get('rec_type')=='value' and r.get('anchor')=='pinnacle' and (t.get('pin_age_min') or 0)>PIN_STALE_MIN:
+                _skip='stale'
+            if _skip:
+                if _skip=='news':
+                    news_skips+=1; t['rec']['text']='(news window, not logged this run) '+t['rec']['text']
+                else:
+                    stale_skips+=1; t['rec']['text']='(stale Pinnacle quote, not logged) '+t['rec']['text']
+                continue
+            # Prediction-market quotes for our side (F39, LOG-ONLY). fair = the
+            # devigged Pinnacle-anchored prob already on the rec.
+            play['kalshi_ticker']=play['kalshi_bid']=play['kalshi_ask']=play['kalshi_ev_taker']=play['kalshi_ev_maker']=None
+            play['poly_mid']=play['poly_bid']=play['poly_ask']=play['poly_ev_mid']=None
+            _fairp=r.get('fair')
+            if r.get('market')=='Moneyline':
+                _side=str(r.get('side'))
+                if t.get('sport')=='mlb':
+                    _ca,_cb=KALSHI_MLB.get(t['away']),KALSHI_MLB.get(t['home'])
+                    _my=KALSHI_MLB.get(_side)
+                    _evs=pm_kal.get(frozenset({_ca,_cb})) if (_ca and _cb) else None
+                    if _evs and _my:
+                        _e=min(_evs,key=lambda e:abs((datetime.fromisoformat(str(e.get('close')).replace('Z','+00:00'))-datetime.fromisoformat(str(t['time']).replace('Z','+00:00'))).total_seconds()) if e.get('close') else 9e9)
+                        _q=_e['teams'].get(_my)
+                        if _q:
+                            play['kalshi_ticker']=_q.get('ticker'); play['kalshi_bid']=_q.get('bid'); play['kalshi_ask']=_q.get('ask')
+                            _n=max(1,int(float(r.get('units') or 1.0)*UNIT_DOLLARS/max(_q.get('ask') or 0.5,0.01)))
+                            play['kalshi_n']=_n
+                            play['kalshi_ev_taker']=kalshi_ev(_fairp,_q.get('ask'),_n,KALSHI_TAKER_MULT)
+                            # Maker caveat (adverse selection, from the research pass):
+                            # resting bids fill disproportionately when the market is
+                            # moving AGAINST you; this number is an upper bound.
+                            play['kalshi_ev_maker']=kalshi_ev(_fairp,_q.get('bid'),_n,KALSHI_MAKER_MULT)
+                    elif _ca and _cb:
+                        pm_miss+=1
+                _pq=pm_pol.get((t['away'],t['home']))
+                if _pq and _pq.get(_side):
+                    _p=_pq[_side]
+                    play['poly_mid']=_p.get('mid'); play['poly_bid']=_p.get('bid'); play['poly_ask']=_p.get('ask')
+                    if _fairp and _p.get('mid'):
+                        _pm=POLY_TAKER_MULT.get(t.get('sport'),0.0)
+                        _pcost=_p['mid']+(_pm*_p['mid']*(1-_p['mid']) if _pm else 0.0)
+                        play['poly_ev_mid']=round(_fairp/_pcost-1,4)
+            # best executable venue by fee-adjusted EV (LOG-ONLY, decisions unchanged)
+            _cand={'bovada':r.get('ev')}
+            if r.get('bo_price') is not None and _fairp: _cand['betonline']=round(_fairp*am2dec(r['bo_price'])-1,4)
+            if play.get('kalshi_ev_taker') is not None: _cand['kalshi']=play['kalshi_ev_taker']
+            if play.get('poly_ev_mid') is not None: _cand['polymarket']=play['poly_ev_mid']
+            _cand={k:v for k,v in _cand.items() if v is not None}
+            play['exec_best_venue']=max(_cand,key=_cand.get) if _cand else None
+            play['exec_best_ev']=round(_cand[play['exec_best_venue']],4) if _cand else None
+            # our-side AN per-book ML prices (source sweep, log-only)
+            _anm=((t.get('sharp') or {}).get('an_ml')) or None
+            if _anm and r.get('market')=='Moneyline':
+                _sk='away' if str(r.get('side'))==str(t['away']) else ('home' if str(r.get('side'))==str(t['home']) else None)
+                play['an_ml']={b:v.get(_sk) for b,v in _anm.items() if v.get(_sk)} if _sk else None
+            else:
+                play['an_ml']=None
+            ctx=mlb_ctx.get((t['away'],t['home'])) if t.get('sport')=='mlb' else None
+            if ctx is None and mlb_ctx and t.get('sport')=='mlb': ctx_misses+=1
+            for k in ('mlb_gamePk','venue','day_night','double_header','probable_away','probable_away_id',
+                      'probable_home','probable_home_id','wx_condition','wx_temp_f','wx_wind'):
+                play[k]=(ctx or {}).get(k)
+            play['pin_age_min']=t.get('pin_age_min')
+            _ven=(ctx or {}).get('venue')
+            play['roof']=VENUE_GEO[_ven][2] if _ven in VENUE_GEO else None
+            play['park_rf_approx']=PARK_RF_APPROX.get(_ven)
+            for k,v in (wx.get(_ven) or {}).items(): play[k]=v
+            play['probable_changed']=(str((ctx or {}).get('mlb_gamePk')) in scratches) or None
+            todays.append(play)
+    if ctx_misses: print(f"    ! MLB Stats context: {ctx_misses} logged play(s) had no schedule match (fields logged as None)")
+    if pm_miss: print(f"    ! Kalshi join: {pm_miss} ML play(s) had team codes but no matching market (check KALSHI_MLB map)")
+    if stale_skips: print(f"    ! {stale_skips} value rec(s) NOT logged: Pinnacle quote older than {PIN_STALE_MIN} min (phantom-edge discard)")
+    if news_skips: print(f"    ! {news_skips} rec(s) NOT logged this run: probable-pitcher change in progress (news window)")
+    if RUN_MODE=='observe':
+        added=0
+        print("  Observe mode: board read, snapshots and closes updated, NO plays logged (entry timing stays 15:00/21:30).")
+    else:
+        added=log_plays(log_path, todays)
+    # a scratch AFTER we bet changes the bet's quality: stamp pending plays (capture-or-lose)
+    if scratches:
+        try:
+            _lg=load_log(log_path); _n=0
+            for _p in _lg['plays']:
+                if _p.get('result') is None and str(_p.get('mlb_gamePk')) in scratches and not _p.get('probable_changed_post_log'):
+                    _p['probable_changed_post_log']=True; _n+=1
+            if _n: save_log(log_path,_lg); print(f"    ! {_n} pending play(s) stamped probable_changed_post_log")
+        except Exception as _e: print(f"    ! scratch stamping skipped: {_e}")
+    runs=append_runlog(runlog_path, {'ts':now_iso,'mode':RUN_MODE,'model_version':MODEL_VERSION,
+        'odds_games':run_odds_games,'an_games':run_an_games,'unmatched':run_unmatched,
+        'bov_absent':run_bov_absent,'ctx_misses':ctx_misses,'plays_logged':added,
+        'closes':touched,'graded':graded,'scratches':len(scratches),'wx_parks':len(wx),
+        'pm_kalshi':pm_counts.get('kalshi_events'),'pm_poly':pm_counts.get('poly_games'),'pm_miss':pm_miss,
+        'stale_skips':stale_skips,'news_skips':news_skips})
+    allc['_runlog']=runs[-30:]
     # 3. snapshot every graded game this run (edge-over-time dataset)
     n_snaps=log_snapshots(snap_path, allc)
+    for _k,_cards in allc.items():
+        if isinstance(_cards,list):
+            for _c in _cards:
+                if isinstance(_c,dict):
+                    _c.pop('_books_h2h',None); _c.pop('_ex_back',None); _c.pop('_ex_lay',None)
     # 4. summary + full stats for the dashboards
     summ=tracker_summary(log_path, UNIT_DOLLARS)
     stats=compute_stats(log_path, snap_path, UNIT_DOLLARS)
@@ -1368,19 +2100,49 @@ def main():
     # 5. CSV exports (for manual sorting), written to docs/ when on GitHub, else here
     csv_dir = os.path.join(here,"docs") if CI else here
     os.makedirs(csv_dir, exist_ok=True)
+    try:
+        _rl=json.load(open(runlog_path)).get('runs',[]) if os.path.exists(runlog_path) else []
+    except Exception: _rl=[]
+    if _rl:
+        write_csv(os.path.join(csv_dir,"runlog.csv"), _rl,
+                  ['ts','mode','model_version','odds_games','an_games','unmatched','bov_absent',
+                   'ctx_misses','plays_logged','closes','graded'])
     betlog=load_log(log_path)
     write_csv(os.path.join(csv_dir,"bets.csv"), betlog['plays'],
-              ['date','commence','sport','away','home','market','side','point','price','units',
-               'grade','gap','contrarian','steam','has_value','ev','fair','fair_mult','anchor',
-               'close_price','clv','hours_to_game','result','units_pl','model_version','event_id'])
+              ['date','run_ts','commence','sport','away','home','market','side','point','price','units',
+               'units_reason','rec_type','grade','gap','tickets','money','num_bets',
+               'contrarian','steam','steam_delta','has_value','ev','fair','fair_mult','anchor',
+               'nb','pin_price','pin_opp','ex_back','ex_lay','ex_mid',
+               'mlb_gamePk','venue','day_night','double_header',
+               'probable_away','probable_away_id','probable_home','probable_home_id',
+               'wx_condition','wx_temp_f','wx_wind',
+               'roof','park_rf_approx','om_temp_f','om_wind_kph','om_wind_dir_deg','pin_age_min',
+               'bo_price','best_price','best_book','an_ml','probable_changed','probable_changed_post_log',
+               'kalshi_ticker','kalshi_bid','kalshi_ask','kalshi_n','kalshi_ev_taker','kalshi_ev_maker',
+               'poly_mid','poly_bid','poly_ask','poly_ev_mid','exec_best_venue','exec_best_ev',
+               'close_price','close_fair','close_anchor','close_point','close_ts','close_obs',
+               'close_line_moved','clv','clv_fair','clv_measured',
+               'hours_to_game','result','void_reason','units_pl','model_version','event_id'])
     snaps_all=(json.load(open(snap_path)).get('snaps',[]) if os.path.exists(snap_path) else [])
     write_csv(os.path.join(csv_dir,"snapshots.csv"), snaps_all,
               ['run_ts','sport','game','commence','hours_to_game','sharp_side','grade','gap',
+               'h2h_disp','ml_ex_mid','an_ml',
                'tickets','money','contrarian','steam','has_value','rec_price','rec_market','rec_side',
-               'ev','fair','anchor','event_id','units'])
+               'ev','fair','fair_mult','nb','anchor','event_id','units'])
 
     # render HTML
-    html = TEMPLATE_HEAD + "\n<script>\nconst ALL=" + json.dumps(allc, default=str) + ";\n</script>\n<script>\n" + TEMPLATE_APP + "\n</script>\n</body>\n</html>"
+    MON=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    _now_m=datetime.now(timezone.utc).month
+    _active={sp['key'] for sp in active_sports()}
+    def _ret_month(sp):
+        for i in range(1,13):
+            m=(_now_m+i-1)%12+1
+            if m in sp['months']: return MON[m]
+        return ''
+    sports_js=[{'key':sp['key'],'label':sp['label'],'live':sp['key'] in _active,
+                **({} if sp['key'] in _active else {'ret':_ret_month(sp)})}
+               for sp in SPORTS if sp['enabled'] or sp['key'] in _active]
+    html = TEMPLATE_HEAD + "\n<script>\nconst ALL=" + json.dumps(allc, default=str) + ";\n</script>\n<script>\n" + TEMPLATE_APP.replace("__SPORTS_JS__", json.dumps(sports_js)) + "\n</script>\n</body>\n</html>"
     ts=datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     archive=os.path.join(hist, f"ridgeseeker_{ts}.html")
     with open(archive,'w',encoding='utf-8') as f: f.write(html)
@@ -1403,6 +2165,9 @@ def main():
             if p['ready']: print(f"  >> You've hit the bar to move to ${p['to']}/unit. (Check bankroll: want ~${p['bankroll_need']}+ behind it.)")
             else: print(f"  Toward ${p['to']}/unit: {p['bets_done']}/{p['bets_need']} bets, {p['units_done']:+.1f}/{p['units_need']}u")
             if s['concentrated']: print(f"  (Heads up: profit is concentrated in one big hit, so keep going before trusting it.)")
+    if s.get('open_units'):
+        flag=" !! over the daily exposure guidance, prioritize by EV if betting real money" if s['open_units']>MAX_DAILY_UNITS else ""
+        print(f"Open exposure: {s['open_units']:.1f}u pending (guidance: <= {MAX_DAILY_UNITS:.0f}u/slate){flag}")
     print(f"Saved: {archive}")
     if not CI:
         print(f"Opening dashboard...")
