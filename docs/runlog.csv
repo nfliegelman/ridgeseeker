@@ -1,2 +1,3 @@
 ts,mode,model_version,odds_games,an_games,unmatched,bov_absent,ctx_misses,plays_logged,closes,graded
 2026-07-05T00:51:19.623726+00:00,full,2026-07-04.v13-research1,25,15,0,2,0,0,0,0
+2026-07-05T16:14:45.188096+00:00,full,2026-07-04.v13-research1,15,15,0,0,0,1,0,0
