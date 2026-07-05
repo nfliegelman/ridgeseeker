@@ -150,8 +150,8 @@
       "close_point": null,
       "close_ts": "2026-07-05T16:14:45.188096+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.53,
       "hours_to_game": 3.75,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -181,8 +181,9 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-07-05",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.5,
+      "clv_measured": false
     }
   ]
 }
