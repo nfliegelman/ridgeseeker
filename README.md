@@ -12,6 +12,7 @@ Finds real sports betting edges (MLB now; more sports in season) and tracks whet
 - Every recommended play is logged and graded automatically off final scores.
 - **EV at close** is the headline metric: your entry price scored against the market's final fair value (devigged Pinnacle when available). Price CLV (did your entry beat the last Bovada price?) is tracked alongside. Consistently positive over 50+ measured bets is proof of edge long before wins and losses settle the argument.
 - Results tab: record, ROI, CLV, and breakdowns by stated EV, sharp grade, unit size, market, price, and time-to-game.
+- **Signal lab:** every sharp lean S through D and every value flag is also logged as a zero-unit shadow row and graded against real closes, so "do the C's carry EV?" gets answered with data. Shadow rows never touch the record, the tracker, or the level-up gates.
 
 ## Schedule
 Covers MLB now, with NFL, NBA, NHL, college football, and college basketball lighting up automatically when their seasons start (off-season sports cost nothing). Three runs daily: 15:00 UTC (~10am Central: grades last night, morning board), 21:30 UTC (~4:30pm Central: pre-slate board with matured sharp money), and 22:45 UTC (~5:45pm Central: a cheap close-capture pass that sharpens CLV right before the night slate, no new plays). Uses ~420 of the ~500 free monthly API credits, leaving headroom for manual runs.

@@ -14,7 +14,7 @@
 - The W/L record is NOT an endpoint: proving a +3.5% edge through wins and losses needs ~8,100 bets, about 11 seasons at this volume (AUDIT_TODO F32). The expected-vs-realized card and drift card are monitoring, not endpoints. Segment tables are exploratory, never victory conditions.
 - Decision logic may only be revisited at the N-gates (100 graded: anchor A/B + devig comparison; 150: calibration; 250: full review). Between gates, no tuning.
 - [ ] Watch "By stated EV": if 8%+ stated edges do not outperform 3-5% ones, the fair value or the gate needs work.
-- [ ] Watch "By sharp grade": the tickets/money gap signal is UNPROVEN. If S/A grades do not out-earn B/C over 100+ bets, demote the sharp signal to a tiebreaker or drop it. Do not defend it out of loyalty.
+- [ ] Watch "By sharp grade": the tickets/money gap signal is UNPROVEN. If S/A grades do not out-earn B/C over 100+ bets, demote the sharp signal to a tiebreaker or drop it. Do not defend it out of loyalty. INSTRUMENT SHIPPED v14.3: the Signal lab shadow ledger logs the sharp-side ML for EVERY grade S through D at zero units (the real betlog only ever received hero plays, so this comparison had no uniform data before). The C/D verdict reads off the shadow table's EV-at-close column; treat ~30 graded per row as the earliest meaningful glance and the existing N-gates as the only decision points. Same for the value engine: value flags without sharp agreement were never logged either; the "value flag" shadow row now measures the Pinnacle-anchor engine on its own.
 
 ## 1b. Anchor A/B (v12 groundwork shipped, GATED ~100 graded plays)
 

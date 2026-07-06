@@ -1195,8 +1195,21 @@ function renderResults(){
   const o=S.overall||{n:0};
   const money=(u)=>{const d=Math.round(u*ud);return (u>=0?'+':'')+u+'u ('+(d>=0?'+$':'-$')+Math.abs(d)+')';};
   const cls=(u)=>u>=0?'pos':'neg';
+  const pct=(v)=>v==null?'-':`<span class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v}%</span>`;
+  // Signal lab (shadow ledger): rendered on BOTH paths. A stretch of C-only boards
+  // is exactly when the shadow table matters most, and it can have data while the
+  // real record is still empty.
+  function shadowLab(){
+    if(!(S.shadow&&S.shadow.rows&&Object.keys(S.shadow.rows).length)) return '';
+    const sh=S.shadow; let srows='';
+    ['S','A','B','C','D','value flag'].forEach(k=>{const r=sh.rows[k];if(!r)return;
+      const thin=r.graded<30?'<span class="thin2"> small</span>':'';
+      srows+=`<tr><td class="g" style="color:${GC[k]||'#9aa6b6'}">${k}</td><td>${r.graded}/${r.n}${thin}</td><td>${r.win_pct==null?'-':r.win_pct+'%'}</td><td class="${cls(r.flat_pl||0)}">${r.flat_roi==null?'-':(r.flat_roi>=0?'+':'')+r.flat_roi+'%'}</td><td>${r.fair_avg==null?'-':pct(r.fair_avg)}${r.fair_n?` <span class="thin2">n=${r.fair_n}</span>`:''}</td></tr>`;});
+    return `<div class="rsect">Signal lab (shadow board, not bets)</div><table class="rtable"><tr><th>Signal</th><th>Graded/Logged</th><th>Win%</th><th>Flat ROI</th><th>EV at close</th></tr>${srows}</table><div class="rnote">Every sharp lean S through D (sharp-side moneyline at Bovada, entry frozen at first sighting) and every value flag is logged here at ZERO units, purely to measure the signals the tool sees but does not bet. EV at close is the same headline metric as above, measured closes only. Flat ROI assumes 1u on every row. Excluded from the record, tracker, level gates, and the pre-registered endpoint. A row means little before ~30 graded.${sh.pending?' '+sh.pending+' pending.':''}</div>`;
+  }
   if(!o.n){
-    host.innerHTML=healthStrip()+`<div class="rempty"><h3>No settled bets yet</h3><p>Your results build automatically as recommended games finish. Check back after a few slates.</p></div>
+    host.innerHTML=healthStrip()+`<div class="rempty"><h3>No settled bets yet</h3><p>Your results build automatically as recommended games finish. Check back after a few slates.</p></div>`
+    +shadowLab()+`
     <div class="rsect">Raw data</div><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div>
     <div class="rnote">bets.csv = every recommended play and its result. snapshots.csv = each run's readings, for edge-over-time analysis.</div>`;
     return;
@@ -1210,20 +1223,22 @@ function renderResults(){
   </div><div class="rnote">${o.pending||0} bets still pending.${o.voids?` ${o.voids} voided (postponed/cancelled, refunded like a book would).`:''}${o.pushes?` ${o.pushes} pushed.`:''} $${ud}/unit.</div>`;
   if(S.clv&&S.clv.n_graded){
     const c=S.clv;
-    const pct=(v)=>v==null?'-':`<span class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${v}%</span>`;
     h+=`<div class="rcard"><b>Closing line value:</b> EV at close avg ${pct(c.fair_avg)} (positive ${c.fair_pos==null?'-':c.fair_pos+'%'} of ${c.fair_n}) · price CLV avg ${pct(c.avg)} (beat the close ${c.pos_pct==null?'-':c.pos_pct+'%'} of ${c.n}).<div class="rnote">EV at close = the entry price scored against the devigged, Pinnacle-anchored fair probability at the last pregame observation: the market's final verdict on each bet, and the headline metric. Price CLV = entry vs the last Bovada price, same-book line movement. Coverage: ${c.n_measured} of ${c.n_graded} graded plays had a post-entry close observation${c.coverage==null?'':' ('+c.coverage+'%)'}; the rest are excluded, not counted as zero. The close is still the last reading this tool saw, an approximation given the run schedule.</div></div>`;
   }
   h+=healthStrip();
-  const evr=s.ev_real;
+  const evr=S.ev_real;
   if(evr&&evr.n){ h+=`<div class="rcard"><b>Expected vs realized:</b> stated EV summed to ${evr.exp>0?'+':''}${evr.exp}u across ${evr.n} settled bets; reality delivered ${evr.act>0?'+':''}${evr.act}u (gap ${evr.gap>0?'+':''}${evr.gap}u).<div class="rnote">A persistently large negative gap means stated edges are inflated. Meaningless before ~50 bets.</div></div>`; }
-  const cr=s.clv_roll;
+  const cr=S.clv_roll;
   if(cr&&cr.n>=10){ h+=`<div class="rcard"><b>Drift check:</b> EV-at-close rolling last ${cr.win}: ${pct(cr.roll)} vs cumulative ${pct(cr.cum)} (n=${cr.n}).<div class="rnote">Rolling far below cumulative suggests the edge is decaying or the market adapted (item 17).</div></div>`; }
-  const cs=s.clv_seg;
-  if(cs&&cs.rows&&cs.rows.length&&s.clv&&s.clv.fair_n>=10){ h+=`<div class="rcard"><b>EV-at-close by segment</b> <span class="rnote">(exploratory only; the pre-registered endpoint is the overall number)</span>${cs.rows.map(r=>`<div class="rnote">${r.k}: ${pct(r.avg)} (n=${r.n})</div>`).join('')}</div>`; }
+  const cs=S.clv_seg;
+  if(cs&&cs.rows&&cs.rows.length&&S.clv&&S.clv.fair_n>=10){ h+=`<div class="rcard"><b>EV-at-close by segment</b> <span class="rnote">(exploratory only; the pre-registered endpoint is the overall number)</span>${cs.rows.map(r=>`<div class="rnote">${r.k}: ${pct(r.avg)} (n=${r.n})</div>`).join('')}</div>`; }
   h+=`<div class="rcard"><b>What normal variance looks like</b> (simulation at this tool's price and stake profile, 20k trials of 100 bets): even a model with a REAL +3.5% edge hits a median max drawdown of ~15u and an 8-loss streak, and still finishes negative about 40% of the time; a no-edge model lands anywhere in roughly -26u to +26u. At this sample size, judge the model on EV at close and CLV, not on the W/L record.</div>`;
   h+=`<div class="rsect">By stated EV</div>`+simpleTbl(S.by_ev);
   // by grade
   h+=`<div class="rsect">By sharp grade</div>`+gradeTbl(S.by_grade);
+  // Signal lab (shadow ledger): the answer to "do C leans or raw value flags carry
+  // EV" lives here, on real closes, without ever risking a unit on them.
+  h+=shadowLab();
   if(S.cumulative&&S.cumulative.length>1) h+=`<div class="rsect">Cumulative units</div><div class="rcard">${lineChart(S.cumulative,ud)}</div>`;
   h+=`<div class="rsect">Units won by grade</div><div class="rcard">${gradeBars(S.by_grade)}</div>`;
   h+=`<div class="rsect">By unit size</div>`+simpleTbl(S.by_units);
@@ -1389,8 +1404,13 @@ def _bkey(p):
     scheduled for tomorrow getting logged again tomorrow under a new date, and (2)
     doubleheader games colliding. Legacy plays without an event id keep the old key."""
     eid=p.get('event_id')
-    if eid: return f"{eid}|{p['market']}|{p['side']}"
-    return f"{p['date']}|{p['away']}|{p['home']}|{p['market']}|{p['side']}"
+    # Shadow rows live in their own key namespace, WITH the kind: on a double-down
+    # game the sharp lean and the value flag are the same (event, market, side), and
+    # both ledgers need their row (the S gradient must include every S game, the
+    # value ledger every value game). Without the kind the second row silently drops.
+    pre=f"sh|{p.get('shadow_kind') or ''}|" if p.get('shadow') else ''
+    if eid: return f"{pre}{eid}|{p['market']}|{p['side']}"
+    return f"{pre}{p['date']}|{p['away']}|{p['home']}|{p['market']}|{p['side']}"
 def load_log(path):
     if os.path.exists(path):
         try: return json.load(open(path))
@@ -1403,7 +1423,9 @@ def log_plays(path, recs):
     # can flip (ML in the morning, total in the afternoon) as prices move. Without this
     # guard both would log under different keys: correlated double exposure on one game
     # and a double-counted result. First logged play wins; later flips are skipped.
-    open_events={p.get('event_id') for p in log['plays'] if p.get('result') is None and p.get('event_id')}
+    # Shadow rows are excluded here on purpose: a pending zero-unit shadow on a game
+    # must never block the real play from logging (exposure is a real-play concept).
+    open_events={p.get('event_id') for p in log['plays'] if p.get('result') is None and p.get('event_id') and not p.get('shadow')}
     today=datetime.now(timezone.utc).strftime('%Y-%m-%d'); added=0
     for r in recs:
         p=dict(r); p['date']=today; p['result']=None; p['units_pl']=None
@@ -1412,6 +1434,93 @@ def log_plays(path, recs):
             log['plays'].append(p); existing.add(_bkey(p)); added+=1
             if p.get('event_id'): open_events.add(p['event_id'])
     save_log(path, log); return added
+
+def build_shadow_plays(allc, now_iso):
+    """SIGNAL LAB (shadow ledger, zero units, measurement only). The real betlog only
+    ever receives hero plays (S/A grades and double-downs), so 'do C leans carry EV?'
+    and 'does the value engine work when sharp money does not agree?' were structurally
+    unanswerable: the data was never captured. FUTURE.md section 1 even asks to compare
+    S/A vs B/C, which the real ledger cannot do on a uniform basis. This builds one
+    zero-unit shadow row per pregame game for (a) the sharp side's MONEYLINE at Bovada
+    for EVERY grade S through D (uniform basis: same market, same book, first-signal
+    entry) and (b) the value play on every has_value game. Rows are flagged shadow=True,
+    keyed in their own namespace, and excluded from the record, tracker, exposure,
+    level gates, and the pre-registered clv_fair endpoint. They flow through the normal
+    close-refresh and grading machinery, so each earns its own clv_fair: the same
+    headline metric, on signals the tool deliberately does not bet. No suppressions
+    apply (capture-or-lose: stale-anchor and news-window rows are stamped via
+    pin_age_min and can be filtered in analysis; clv_fair itself only depends on the
+    CLOSING fair, so entry-anchor staleness does not corrupt the shadow metric).
+    Costs zero API credits: everything here is already fetched."""
+    out=[]
+    for sport,cards in allc.items():
+        if sport.startswith('_'): continue
+        for c in cards:
+            if (hours_until(c.get('time')) or 0)<=0: continue          # clock guard, mirrors real entry
+            if (c.get('status') or {}).get('state') not in (None,'scheduled'): continue
+            base={'away':c['away'],'home':c['home'],'sport':sport,
+                  'commence':c['time'],'event_id':c.get('event_id'),
+                  'model_version':MODEL_VERSION,'run_ts':now_iso,
+                  'hours_to_game':hours_until(c['time']),
+                  'pin_age_min':c.get('pin_age_min'),
+                  'units':0.0,'units_reason':None,'rec_type':None,
+                  'shadow':True,'has_value':c.get('has_value')}
+            sg=c.get('sharp_grade')
+            if sg:
+                mlp=next((p for p in c.get('plays',[]) if p['mkt']=='ML' and str(p['side'])==str(sg['side'])),None)
+                if mlp and mlp.get('price') is not None:
+                    out.append({**base,'shadow_kind':'sharp',
+                                'market':'Moneyline','side':str(sg['side']),'point':None,'price':mlp['price'],
+                                'grade':sg['grade'],'gap':sg.get('gap'),'tickets':sg.get('tickets'),
+                                'money':sg.get('money'),'num_bets':sg.get('num_bets'),
+                                'contrarian':sg.get('contrarian'),'steam':sg.get('steam'),
+                                'steam_delta':sg.get('steam_delta'),
+                                'ev':mlp.get('ev'),'fair':mlp.get('fair'),'fair_mult':mlp.get('fair_mult'),
+                                'anchor':mlp.get('anchor'),'nb':mlp.get('nb'),
+                                'pin_price':mlp.get('pin_price'),'pin_opp':mlp.get('pin_opp'),
+                                'close_price':mlp['price'],'close_fair':mlp.get('fair'),
+                                'close_anchor':mlp.get('anchor'),'close_point':None,
+                                'close_ts':now_iso,'close_obs':0,'clv':None,'clv_fair':None})
+            v=c.get('value_play')
+            if c.get('has_value') and v and v.get('price') is not None:
+                mlabel=(c.get('spread_label') or 'Spread') if v['mkt']=='SPR' else ('Total' if v['mkt']=='TOT' else 'Moneyline')
+                out.append({**base,'shadow_kind':'value',
+                            'market':mlabel,'side':str(v['side']),'point':v.get('point'),'price':v['price'],
+                            'grade':(sg or {}).get('grade'),'gap':(sg or {}).get('gap'),
+                            'tickets':(sg or {}).get('tickets'),'money':(sg or {}).get('money'),
+                            'num_bets':(sg or {}).get('num_bets'),
+                            'contrarian':(sg or {}).get('contrarian'),'steam':(sg or {}).get('steam'),
+                            'steam_delta':(sg or {}).get('steam_delta'),
+                            'ev':v.get('ev'),'fair':v.get('fair'),'fair_mult':v.get('fair_mult'),
+                            'anchor':v.get('anchor'),'nb':v.get('nb'),
+                            'pin_price':v.get('pin_price'),'pin_opp':v.get('pin_opp'),
+                            'close_price':v['price'],'close_fair':v.get('fair'),
+                            'close_anchor':v.get('anchor'),'close_point':v.get('point'),
+                            'close_ts':now_iso,'close_obs':0,'clv':None,'clv_fair':None})
+    return out
+
+def log_shadow_plays(path, shadows):
+    """Same freeze-on-first-sight discipline as log_plays, in the shadow namespace.
+    One PENDING shadow per (event, kind): if the sharp side flips between the 15:00
+    and 21:30 runs, the first observation wins, exactly like real entries freeze.
+    Sharp and value shadows on the same game are both kept (different questions)."""
+    if not shadows: return 0
+    log=load_log(path); existing={_bkey(p) for p in log['plays']}
+    open_shadow={(p.get('event_id'),p.get('shadow_kind'))
+                 for p in log['plays']
+                 if p.get('shadow') and p.get('result') is None and p.get('event_id')}
+    today=datetime.now(timezone.utc).strftime('%Y-%m-%d'); added=0
+    for r in shadows:
+        p=dict(r); p['date']=today; p['result']=None; p['units_pl']=None
+        k=(p.get('event_id'),p.get('shadow_kind'))
+        if p.get('event_id') and k in open_shadow: continue
+        if _bkey(p) in existing: continue
+        log['plays'].append(p); existing.add(_bkey(p))
+        if p.get('event_id'): open_shadow.add(k)
+        added+=1
+    if added: save_log(path, log)
+    return added
+
 def _grade_one(p, res):
     """Returns 'win' / 'loss' / 'push' / None (None = cannot grade). Pushes MUST be
     graded as pushes: the old version returned None on a pushed line, which left the
@@ -1591,7 +1700,8 @@ def append_runlog(path, entry, keep=500):
 
 def tracker_summary(path, current_unit):
     log=load_log(path)
-    settled=[p for p in log['plays'] if p.get('result') in ('win','loss')]
+    real=[p for p in log['plays'] if not p.get('shadow')]   # shadow rows are measurement, never exposure
+    settled=[p for p in real if p.get('result') in ('win','loss')]
     n=len(settled); wins=sum(1 for p in settled if p['result']=='win')
     units_pl=round(sum(p.get('units_pl',0) or 0 for p in settled),2)
     biggest=max((p.get('units_pl',0) or 0 for p in settled), default=0)
@@ -1602,11 +1712,11 @@ def tracker_summary(path, current_unit):
         progress={'to':nxt['to'],'bets_done':n,'bets_need':nxt['min_bets'],
                   'units_done':units_pl,'units_need':nxt['min_units'],'bankroll_need':nxt['min_bankroll'],
                   'ready':(n>=nxt['min_bets'] and units_pl>=nxt['min_units'] and not concentrated)}
-    pend=[p for p in log['plays'] if p.get('result') is None]
+    pend=[p for p in real if p.get('result') is None]
     open_units=round(sum(float(p.get('units') or 0) for p in pend),2)
     return {'n':n,'wins':wins,'losses':n-wins,'units_pl':units_pl,
-            'pushes':len([p for p in log['plays'] if p.get('result')=='push']),
-            'voids':len([p for p in log['plays'] if p.get('result')=='void']),
+            'pushes':len([p for p in real if p.get('result')=='push']),
+            'voids':len([p for p in real if p.get('result')=='void']),
             'pending':len(pend),'open_units':open_units,'max_daily_units':MAX_DAILY_UNITS,
             'concentrated':concentrated,'progress':progress,'current_unit':current_unit}
 
@@ -1709,7 +1819,12 @@ def compute_stats(log_path, snap_path, unit_dollars):
     """Aggregate settled bets into success/profitability by grade, unit size, market,
     value-vs-sharp, price bucket, and hours-to-game. Also pull edge-over-time from snapshots."""
     log=load_log(log_path)
-    settled=[p for p in log['plays'] if p.get('result') in ('win','loss')]
+    # Shadow rows (signal lab) are excluded from EVERY aggregate below, including the
+    # pre-registered clv_fair endpoint: mixing zero-unit measurement rows into the
+    # record or the primary metric would move the goalposts. They get their own
+    # section at the bottom.
+    plays_real=[p for p in log['plays'] if not p.get('shadow')]
+    settled=[p for p in plays_real if p.get('result') in ('win','loss')]
     def agg(rows):
         n=len(rows); w=sum(1 for r in rows if r['result']=='win')
         risked=sum(float(r.get('units',1)) for r in rows)
@@ -1742,9 +1857,9 @@ def compute_stats(log_path, snap_path, unit_dollars):
         if h<6: return '3-6h'
         return '6h+'
     overall=agg(settled)
-    overall['pending']=len([p for p in log['plays'] if p.get('result') is None])
-    overall['pushes']=len([p for p in log['plays'] if p.get('result')=='push'])
-    overall['voids']=len([p for p in log['plays'] if p.get('result')=='void'])
+    overall['pending']=len([p for p in plays_real if p.get('result') is None])
+    overall['pushes']=len([p for p in plays_real if p.get('result')=='push'])
+    overall['voids']=len([p for p in plays_real if p.get('result')=='void'])
     # cumulative units over time (by date)
     from collections import OrderedDict
     cum=OrderedDict(); running=0.0
@@ -1767,7 +1882,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
     # Only MEASURED closes count (at least one post-entry pregame observation);
     # entry-seeded closes are excluded, NOT averaged in as zeros, which would
     # dilute the metric toward 0 and quietly hide the coverage problem.
-    graded_all=[p for p in log['plays'] if p.get('result') is not None]
+    graded_all=[p for p in plays_real if p.get('result') is not None]
     def _measured(p):
         if 'clv_measured' in p: return bool(p.get('clv_measured'))
         return p.get('clv') is not None   # legacy plays: close was only ever set post-entry
@@ -1817,7 +1932,37 @@ def compute_stats(log_path, snap_path, unit_dollars):
         e=r.get('ev')
         if e is None: return 'sharp only (no price edge)'
         return '3-5%' if e<0.05 else '5-8%' if e<0.08 else '8%+'
+    # ---- Signal lab (shadow ledger): the sharp-grade gradient S through D on a
+    # uniform basis (sharp-side ML at Bovada, first-signal entry), plus the raw
+    # value flag. flat_pl/flat_roi assume a hypothetical flat 1u per row; the
+    # comparable headline is fair_avg (EV at close), same metric as real plays,
+    # measured closes only. Exploratory always: never a level gate, never the
+    # pre-registered endpoint.
+    sh=[p for p in log['plays'] if p.get('shadow')]
+    shadow=None
+    if sh:
+        def _sh_agg(rows):
+            graded=[p for p in rows if p.get('result') in ('win','loss')]
+            w=sum(1 for p in graded if p['result']=='win'); fl=0.0
+            for p in graded:
+                try: fl+=(am2dec(float(p['price']))-1) if p['result']=='win' else -1.0
+                except Exception: pass
+            meas=[p for p in graded if p.get('clv_measured') and p.get('clv_fair') is not None]
+            return {'n':len(rows),'graded':len(graded),'wins':w,
+                    'win_pct':round(100*w/len(graded),1) if graded else None,
+                    'flat_pl':round(fl,2),
+                    'flat_roi':round(100*fl/len(graded),1) if graded else None,
+                    'fair_n':len(meas),
+                    'fair_avg':round(sum(p['clv_fair'] for p in meas)/len(meas),2) if meas else None}
+        rows={}
+        for g in ('S','A','B','C','D'):
+            rr=[p for p in sh if p.get('shadow_kind')=='sharp' and p.get('grade')==g]
+            if rr: rows[g]=_sh_agg(rr)
+        vv=[p for p in sh if p.get('shadow_kind')=='value']
+        if vv: rows['value flag']=_sh_agg(vv)
+        shadow={'rows':rows,'pending':len([p for p in sh if p.get('result') is None])}
     return {'overall':overall,
+            'shadow':shadow,
             'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,
             'by_ev':by(ev_bucket, order=['3-5%','5-8%','8%+','sharp only (no price edge)']),
             'by_grade':by(lambda r:r.get('grade'), order=['S','A','B','C','D']),
@@ -2081,10 +2226,15 @@ def main():
     if stale_skips: print(f"    ! {stale_skips} value rec(s) NOT logged: Pinnacle quote older than {PIN_STALE_MIN} min (phantom-edge discard)")
     if news_skips: print(f"    ! {news_skips} rec(s) NOT logged this run: probable-pitcher change in progress (news window)")
     if RUN_MODE=='observe':
-        added=0
+        added=0; sh_added=0
         print("  Observe mode: board read, snapshots and closes updated, NO plays logged (entry timing stays 15:00/21:30).")
     else:
         added=log_plays(log_path, todays)
+        # Signal lab: zero-unit shadow rows for every graded lean (S through D) and
+        # every value flag, logged only when real plays log so the two ledgers share
+        # entry timing. Zero API credits; excluded from record, gates, and endpoint.
+        sh_added=log_shadow_plays(log_path, build_shadow_plays(allc, now_iso))
+        if sh_added: print(f"  Signal lab: {sh_added} zero-unit shadow row(s) logged (sharp S-D leans + value flags, measurement only)")
     # a scratch AFTER we bet changes the bet's quality: stamp pending plays (capture-or-lose)
     if scratches:
         try:
@@ -2099,7 +2249,7 @@ def main():
         'bov_absent':run_bov_absent,'ctx_misses':ctx_misses,'plays_logged':added,
         'closes':touched,'graded':graded,'scratches':len(scratches),'wx_parks':len(wx),
         'pm_kalshi':pm_counts.get('kalshi_events'),'pm_poly':pm_counts.get('poly_games'),'pm_miss':pm_miss,
-        'stale_skips':stale_skips,'news_skips':news_skips})
+        'stale_skips':stale_skips,'news_skips':news_skips,'shadows':sh_added})
     allc['_runlog']=runs[-30:]
     # 3. snapshot every graded game this run (edge-over-time dataset)
     n_snaps=log_snapshots(snap_path, allc)
@@ -2140,6 +2290,7 @@ def main():
                'poly_mid','poly_bid','poly_ask','poly_ev_mid','exec_best_venue','exec_best_ev',
                'close_price','close_fair','close_anchor','close_point','close_ts','close_obs',
                'close_line_moved','clv','clv_fair','clv_measured',
+               'shadow','shadow_kind',
                'hours_to_game','result','void_reason','units_pl','model_version','event_id'])
     snaps_all=(json.load(open(snap_path)).get('snaps',[]) if os.path.exists(snap_path) else [])
     write_csv(os.path.join(csv_dir,"snapshots.csv"), snaps_all,
