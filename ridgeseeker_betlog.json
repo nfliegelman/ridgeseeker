@@ -3480,8 +3480,8 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.99,
       "hours_to_game": 2.13,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -3511,8 +3511,9 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.5,
+      "clv_measured": false
     },
     {
       "away": "Atlanta Braves",
@@ -3557,8 +3558,8 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.41,
       "hours_to_game": 2.21,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -3588,8 +3589,9 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.68,
+      "clv_measured": false
     },
     {
       "away": "Milwaukee Brewers",
@@ -3632,11 +3634,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.54,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Kansas City Royals",
@@ -3679,11 +3682,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.29,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "New York Yankees",
@@ -3726,11 +3730,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.01,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Cleveland Guardians",
@@ -3773,11 +3778,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.38,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Philadelphia Phillies",
@@ -3820,11 +3826,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.54,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Athletics",
@@ -3867,11 +3874,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.99,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Los Angeles Angels",
@@ -3914,11 +3922,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.54,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Atlanta Braves",
@@ -3961,11 +3970,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.41,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Houston Astros",
@@ -4008,11 +4018,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.7,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Colorado Rockies",
