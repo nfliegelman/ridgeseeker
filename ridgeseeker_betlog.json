@@ -4066,11 +4066,12 @@
       "close_point": null,
       "close_ts": "2026-07-12T16:03:18.571767+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.64,
       "date": "2026-07-12",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     }
   ]
 }
