@@ -6010,11 +6010,12 @@
       "close_point": null,
       "close_ts": "2026-07-19T16:01:26.266052+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.5,
       "date": "2026-07-19",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "St. Louis Cardinals",
@@ -6057,11 +6058,12 @@
       "close_point": null,
       "close_ts": "2026-07-19T16:01:26.266052+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.6,
       "date": "2026-07-19",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Los Angeles Dodgers",
@@ -6152,11 +6154,12 @@
       "close_point": null,
       "close_ts": "2026-07-19T22:25:17.060712+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.67,
       "date": "2026-07-19",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     }
   ]
 }
