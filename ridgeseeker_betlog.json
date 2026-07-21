@@ -8122,11 +8122,12 @@
       "close_point": null,
       "close_ts": "2026-07-21T22:26:19.289029+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.66,
       "date": "2026-07-21",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Detroit Tigers",
@@ -8163,17 +8164,18 @@
       "nb": 27,
       "pin_price": 107,
       "pin_opp": -116,
-      "close_price": 102,
-      "close_fair": 0.4727767389956,
+      "close_price": 101,
+      "close_fair": 0.47616611675827647,
       "close_anchor": "pinnacle",
       "close_point": null,
-      "close_ts": "2026-07-21T22:26:19.289029+00:00",
-      "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "close_ts": "2026-07-21T23:40:47.473409+00:00",
+      "close_obs": 1,
+      "clv": 0.5,
+      "clv_fair": -3.81,
       "date": "2026-07-21",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": true
     }
   ]
 }
