@@ -34,7 +34,7 @@ if not ODDS_KEY:
         try: ODDS_KEY = open(_kf).read().strip()
         except Exception: pass
 # Stamp every logged bet so history survives retunes and versions can be compared.
-MODEL_VERSION = "2026-07-04.v13-research1"
+MODEL_VERSION = "2026-07-21.v14-suppressfix1"
 HISTORY_FOLDER = "ridgeseeker_history"           # timestamped HTMLs saved here
 # Auto-detect: are we running on GitHub's servers (cloud) or on a personal laptop?
 CI = (os.environ.get("GITHUB_ACTIONS") == "true") or bool(os.environ.get("EDGEFINDER_CI"))
@@ -724,7 +724,6 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
                 plays.append({'mkt':'TOT','side':s,'point':line,'price':pr,'fair':fp,'fair_mult':fmp,'ev':ev,'nb':n,'anchor':anc,'pin_price':pnp,'pin_opp':pno,'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(pr,ev,n)})
     passed=[p for p in plays if p['pass']]
     best=max(passed,key=lambda x:x['ev']) if passed else None
-    for p in plays: p['fair_am']=prob2am(p['fair'])
     sm=sharp_map.get((away,home))
     if sm is not None and isinstance(sm,dict) and sm.get('an_start') is not None and not _an_same_game(sm, g['commence_time']):
         sm=None   # F45
@@ -766,8 +765,8 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
 <style>
   :root{
     --bg:#14161d;--bg2:#1a1d26;--card:#1e222d;--card2:#252a37;--line:#2e3442;
-    --txt:#eef1f6;--mut:#9aa6b6;--dim:#646f7f;
-    --sharp:#34d399;--sharpd:#0f6b4a;--public:#fb7185;--split:#fbbf24;--rlm:#a78bfa;--gold:#f5c451;
+    --txt:#eef1f6;--mut:#9aa6b6;--dim:#8f9aa8;
+    --sharp:#34d399;--sharpd:#0f6b4a;--public:#fb7185;--split:#fbbf24;--gold:#f5c451;
     --tick:#fb7185;--hand:#34d399;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
@@ -777,6 +776,8 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
     -webkit-font-smoothing:antialiased;padding-bottom:92px}
   .wrap{max-width:760px;margin:0 auto;padding:0 14px}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  /* Keyboard focus: visible on every interactive control (none existed before). */
+  :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   header{padding:22px 0 16px}
   .mast{display:flex;align-items:center;justify-content:space-between}
   .logo{font-size:25px;font-weight:800;letter-spacing:-.6px}.logo b{color:var(--sharp)}
@@ -792,16 +793,10 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
   .hero-h{padding:11px 15px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
     color:var(--gold);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px}
   .hero-b{padding:14px 15px}.hero.none .hero-b{color:var(--mut);font-size:13px}
-  .hero-pick{display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .hero-pick .t{font-size:17px;font-weight:800}.hero-pick .m{font-size:12px;color:var(--mut);margin-top:2px}
-  .hero-pick .o{font-family:var(--mono);font-size:22px;font-weight:800;color:var(--sharp)}
-  .hero-pick .ev{font-family:var(--mono);font-size:11px;color:var(--gold);text-align:right}
-  .hero-why{margin-top:11px;font-size:12.5px;background:rgba(0,0,0,.18);border-radius:8px;padding:9px 11px}
-  .hero-why b{color:var(--gold)}
   .disc{background:#1d1810;border:1px solid #3a2e18;color:#c9a86a;font-size:11px;padding:10px 13px;border-radius:10px;margin-top:14px;line-height:1.55}
   .tabs{display:flex;gap:6px;overflow-x:auto;padding:16px 0 12px;position:sticky;top:0;background:var(--bg);z-index:20;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
-  .tab{flex-shrink:0;padding:9px 14px;border-radius:10px;background:var(--card);border:1px solid var(--line);
+  .tab{flex-shrink:0;padding:9px 14px;border-radius:10px;background:var(--card);border:1px solid var(--line);min-height:44px;font-family:inherit;
     cursor:pointer;font-size:13px;font-weight:700;color:var(--mut);white-space:nowrap;display:flex;align-items:center;gap:7px}
   .tab .led{width:7px;height:7px;border-radius:50%;background:var(--dim)}
   .tab.live .led{background:var(--sharp);box-shadow:0 0 7px var(--sharp)}
@@ -814,40 +809,17 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
   .sect::after{content:"";flex:1;height:1px;background:var(--line)}
   .sect .ct{color:var(--mut);font-family:var(--mono);font-size:10px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
-  .card.add{cursor:pointer}.card.in{border-color:var(--sharp);box-shadow:0 0 0 1px var(--sharpd)}.card.conf{border-color:var(--gold)}
+  .card.conf{border-color:var(--gold)}
   .badgebar{display:flex;align-items:center;gap:7px;padding:9px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .badge{font-size:10.5px;font-weight:800;letter-spacing:.5px;padding:4px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:5px}
   .badge .d{width:6px;height:6px;border-radius:50%}
   .b-SHARP{background:rgba(52,211,153,.13);color:var(--sharp)}.b-SHARP .d{background:var(--sharp)}
-  .b-PUBLIC{background:rgba(251,113,133,.13);color:var(--public)}.b-PUBLIC .d{background:var(--public)}
-  .b-SPLIT{background:rgba(251,191,36,.13);color:var(--split)}.b-SPLIT .d{background:var(--split)}
   .b-VALUE{background:rgba(52,211,153,.13);color:var(--sharp)}
-  .b-CONF{background:var(--gold);color:#3a2c08}.b-PASS{background:rgba(154,166,182,.1);color:var(--mut)}.b-WAIT{background:rgba(251,191,36,.1);color:var(--split)}
-  .badgebar .gr{margin-left:auto;font-family:var(--mono);font-size:13px;font-weight:800}
-  .gr-A{color:var(--gold)}.gr-B{color:var(--sharp)}.gr-C{color:var(--mut)}
+  .b-PASS{background:rgba(154,166,182,.1);color:var(--mut)}
   .body{padding:14px}
   .teams{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
   .team{flex:1}.team .nm{font-size:15.5px;font-weight:700}.team .meta{font-size:11px;color:var(--dim);margin-top:2px}.team.r{text-align:right}
   .at{font-family:var(--mono);font-size:11px;color:var(--dim)}
-  .lines{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-  .ln{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:11px;text-align:center}
-  .ln.val{border-color:var(--sharpd);background:rgba(52,211,153,.06)}
-  .ln .who{font-size:11px;color:var(--mut);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .ln .pr{font-family:var(--mono);font-size:20px;font-weight:800}.ln.val .pr{color:var(--sharp)}
-  .ln .fr{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:5px}
-  .ln .ev{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;margin-top:6px}
-  .ln.val .ev{background:var(--sharp);color:#04130c}.ln .ev.neg{color:var(--dim);border:1px solid var(--line)}
-  /* multi-source probability strip */
-  .srcprob{margin-top:12px;background:var(--bg2);border-radius:10px;padding:11px;border:1px solid var(--line)}
-  .srcprob .h{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--mut);margin-bottom:9px;display:flex;justify-content:space-between}
-  .srcprob .h .true{color:var(--sharp)}
-  .pgrid{display:flex;flex-direction:column;gap:6px}
-  .prow{display:flex;align-items:center;gap:8px;font-size:11px}
-  .prow .src-l{width:64px;color:var(--mut);font-size:10px}
-  .prow .bar{flex:1;height:6px;background:#11131a;border-radius:4px;overflow:hidden}
-  .prow .fill{height:100%;background:linear-gradient(90deg,#34d399,#60a5fa);border-radius:4px}
-  .prow .val{width:42px;text-align:right;font-family:var(--mono);font-size:10px;color:var(--txt)}
-  .prow.true .src-l{color:var(--sharp);font-weight:700}.prow.true .fill{background:var(--sharp)}
   .sharpbox{margin-top:12px;background:var(--bg2);border-radius:10px;padding:12px;border:1px solid var(--line)}
   .sharpbox .sh-h{display:flex;justify-content:space-between;margin-bottom:10px}
   .sharpbox .ttl{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--mut)}
@@ -859,33 +831,13 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
   .dualbar .tk{background:var(--tick);opacity:.85}.dualbar .hd{background:var(--hand);opacity:.85}
   .barkey{display:flex;gap:14px;margin-top:9px;font-size:9.5px;color:var(--dim);font-family:var(--mono)}
   .barkey i{width:8px;height:8px;border-radius:2px;margin-right:4px;display:inline-block;vertical-align:middle}
-  .sh-read{margin-top:10px;font-size:11.5px;line-height:1.5}.sh-read b{color:var(--sharp)}.sh-read .pub{color:var(--public)}
+  .sh-read{margin-top:10px;font-size:11.5px;line-height:1.5}.sh-read b{color:var(--sharp)}
   .note{font-size:12px;color:var(--mut);margin-top:11px;line-height:1.55;background:var(--bg2);border-radius:9px;padding:10px 12px}
   .note b{color:var(--txt)}.note .g{color:var(--sharp)}.note .gold{color:var(--gold)}
   .nodata{font-size:11px;color:var(--dim);margin-top:11px;font-style:italic}
-  .infohd{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:15px;margin-bottom:13px}
-  .infohd .t{font-size:16px;font-weight:800}.infohd .d{font-size:12px;color:var(--mut);margin-top:3px}
-  .infohd .warn{margin-top:11px;font-size:12px;border-radius:8px;padding:9px 11px;line-height:1.5}
-  .infohd .warn.amber{background:rgba(251,191,36,.07);color:#e0b450}.infohd .warn.gray{background:rgba(154,166,182,.06);color:var(--mut)}.infohd .warn.green{background:rgba(52,211,153,.07);color:var(--sharp)}
-  .row{display:flex;align-items:center;padding:11px 14px;border-bottom:1px solid var(--bg2);gap:12px}.row:last-child{border-bottom:none}
-  .row .rk{font-family:var(--mono);font-size:11px;color:var(--dim);width:18px}.row .nm{flex:1;font-size:13.5px;font-weight:600}
-  .row .nm .s{font-family:var(--mono);font-size:9px;color:var(--dim);font-weight:400}.row .pr{font-family:var(--mono);font-size:15px;font-weight:800}
   .empty{border:1px dashed var(--line);border-radius:13px;padding:36px 20px;text-align:center}
   .empty .ic{font-size:24px;opacity:.5;margin-bottom:10px}.empty h3{font-size:14px;color:var(--mut);margin-bottom:6px}
   .empty p{font-size:12.5px;color:var(--dim);max-width:380px;margin:0 auto;line-height:1.5}
-  .dock{position:fixed;bottom:0;left:0;right:0;background:rgba(20,22,29,.98);border-top:1px solid var(--sharpd);backdrop-filter:blur(10px);z-index:50;transform:translateY(calc(100% - 52px));transition:transform .26s}
-  .dock.open{transform:translateY(0)}.dock-w{max-width:760px;margin:0 auto;padding:0 14px}
-  .dock-h{height:52px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
-  .dock-h .t{font-size:13px;font-weight:800}.dock-h .cnt{background:var(--sharp);color:#04130c;font-size:11px;font-weight:800;border-radius:11px;padding:1px 8px;margin-left:7px}
-  .dock-h .pay{font-family:var(--mono);font-size:15px;font-weight:800;color:var(--sharp)}
-  .dock-body{max-height:44vh;overflow-y:auto;padding-bottom:16px}
-  .leg{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bg2);gap:8px}
-  .leg .ln2{font-size:12.5px}.leg .ln2 .s{font-size:10px;color:var(--dim);display:block;margin-top:1px}.leg .lo{font-family:var(--mono);font-size:12.5px;color:var(--sharp)}.leg .x{color:var(--public);font-size:18px;cursor:pointer;padding:0 5px}
-  .calc{display:flex;gap:11px;align-items:center;padding:13px 0 5px}
-  .calc input{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:10px 12px;font-family:var(--mono);font-size:14px;min-width:0}
-  .calc .out{text-align:right}.calc .out .l{font-size:9px;color:var(--dim);text-transform:uppercase}.calc .out .v{font-family:var(--mono);font-size:18px;font-weight:800;color:var(--sharp)}.calc .out .o{font-family:var(--mono);font-size:10px;color:var(--mut)}
-  .dock-empty{color:var(--dim);font-size:12px;text-align:center;padding:18px 0}
-  .clr{background:none;border:1px solid var(--line);color:var(--mut);font-size:11px;padding:7px 11px;border-radius:8px;cursor:pointer}
   footer{color:var(--dim);font-size:10.5px;text-align:center;padding:26px 14px;line-height:1.7}footer b{color:var(--mut)}
 
   .markets{display:flex;flex-direction:column;gap:9px}
@@ -895,22 +847,14 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
   .mkrow .mlbl{font-family:var(--mono);font-size:9px;color:var(--dim);width:22px}
   .mkrow .mside{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mkrow .mprice{font-family:var(--mono);font-weight:800;width:48px;text-align:right}
-  .mkrow .mfair{font-family:var(--mono);font-size:9.5px;color:var(--dim);width:64px;text-align:right}
-  .mkrow .mev{font-family:var(--mono);font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:4px;width:54px;text-align:center}
-  .mkrow .mev.pos{background:var(--sharp);color:#04130c}
-  .mkrow .mev.neg{color:var(--dim);border:1px solid var(--line)}
   .mkrow.best{background:rgba(52,211,153,.07);margin:0 -6px;padding:5px 6px;border-radius:6px}
   .mkrow.best .mprice{color:var(--sharp)}
   .mderr{font-size:11px;color:var(--split);background:rgba(251,191,36,.06);border-radius:7px;padding:8px 10px;line-height:1.45}
-  .shnote{font-size:10px;color:var(--dim);margin-top:7px;font-style:italic}
 
   .gradechip{font-family:var(--mono);font-size:15px;font-weight:800;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px}
   .gradechip.none{background:var(--card2);color:var(--dim);font-size:13px}
   .vyes{font-family:var(--mono);font-size:9px;font-weight:800;color:var(--sharp);margin-left:auto;background:rgba(52,211,153,.13);padding:2px 6px;border-radius:4px}
-  .herograde{font-family:var(--mono);font-weight:800;padding:1px 10px;border-radius:7px;color:#0c0f16;margin-right:6px}
   .sharptag{font-size:9px;color:var(--sharp);font-weight:700}
-  .steam{color:var(--gold);font-weight:600}
-  .b-VALUE{background:rgba(52,211,153,.13);color:var(--sharp)}
 
   .ctags{display:flex;flex-direction:column;gap:4px;margin-top:8px}
   .ctag{font-size:10px;padding:3px 8px;border-radius:5px;display:inline-block;width:fit-content}
@@ -954,7 +898,7 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
   .tpfinal{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
   .tpdelay{font-family:var(--mono);font-size:9.5px;color:var(--split)}
   .viewtoggle{display:flex;gap:8px;margin-top:12px}
-  .vtab{flex:0 0 auto;background:var(--card2);border:1px solid var(--line);color:var(--mut);font-size:14px;font-weight:700;padding:9px 18px;border-radius:999px;cursor:pointer;transition:all .15s;font-family:inherit}
+  .vtab{flex:0 0 auto;background:var(--card2);border:1px solid var(--line);color:var(--mut);font-size:14px;font-weight:700;padding:9px 18px;border-radius:999px;cursor:pointer;transition:all .15s;font-family:inherit;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
   .vtab.active{background:var(--sharp);color:#04130c;border-color:var(--sharp)}
   .rbig{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap}
   .rstat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;flex:1;min-width:96px}
@@ -971,7 +915,7 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
   .thin2{color:var(--dim);font-size:10px;font-style:italic}
   .rnote{color:var(--mut);font-size:11.5px;line-height:1.5;margin-top:7px}
   .dlrow{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
-  .dlrow a{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;color:#60a5fa;text-decoration:none}
+  .dlrow a{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;color:#60a5fa;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
   .rbar{height:20px;border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-family:var(--mono);font-weight:700;color:#0a0d12;min-width:28px}
   .rempty{text-align:center;color:var(--mut);padding:40px 20px}
   .rempty h3{margin-bottom:8px}
@@ -980,10 +924,10 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
 <body>
 <div class="wrap">
   <header>
-    <div class="mast"><div class="logo">ridge<b>seeker</b></div><div class="clock" id="clock"></div></div>
-    <div class="viewtoggle">
-      <button class="vtab active" id="vtab-board" onclick="showView('board')">Today's Board</button>
-      <button class="vtab" id="vtab-results" onclick="showView('results')">Results</button>
+    <div class="mast"><h1 class="logo">ridge<b>seeker</b></h1><div class="clock" id="clock"></div></div>
+    <div class="viewtoggle" role="group" aria-label="View">
+      <button class="vtab active" id="vtab-board" onclick="showView('board')" aria-pressed="true">Today's Board</button>
+      <button class="vtab" id="vtab-results" onclick="showView('results')" aria-pressed="false">Results</button>
     </div>
   </header>
 
@@ -992,7 +936,7 @@ TEMPLATE_HEAD = r"""<!DOCTYPE html>
     <div class="srcrow" id="srcrow"></div>
     <div class="hero" id="hero"></div>
     <div class="disc">⚠️ <b>All signals are real data.</b> Fair probability = Pinnacle with the vig removed (falling back to the no-vig median of ~25 books when Pinnacle skips a market). Sharp money = live ticket/handle from Action Network (US team sports). Estimates, not guarantees; lines move; re-check before betting. 21+ · 1-800-522-4700.</div>
-    <div class="tabs" id="tabs"></div>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Sports"></div>
     <div id="views"></div>
   </div>
 
@@ -1058,7 +1002,6 @@ function gameCard(c){
   else if(sg&&sg.grade!=='D')note=`<div class="note">Sharp money grades <b style="color:${GRADE_COLOR[sg.grade]}">${sg.grade}</b> on ${sg.side}. No price value on Bovada, a sharp lean, not a value bet.</div>`;
   else if(sg)note=`<div class="note">Weak/noise-level signal (D). Not a real edge. <b>Pass.</b></div>`;
   else note=`<div class="note">No value, no sharp signal. <b>Pass.</b></div>`;
-  const addable=c.has_value&&v;
   return `<div class="card ${sg&&(sg.grade==='S')?'conf':''}">
     <div class="badgebar">${chip}${sharpbadge}${valbadge}${statusPill(c.status)}</div>
     <div class="body"><div class="teams"><div class="team"><div class="nm">${c.away}</div><div class="meta">${tStr(c.time)}</div></div><div class="at">${c.three_way?'v':'@'}</div><div class="team r"><div class="nm">${c.home}</div></div></div>
@@ -1140,10 +1083,10 @@ if(TOP.length){
 }
 // tabs
 const tabsEl=document.getElementById('tabs');
-SPORTS.forEach((s,i)=>{const t=document.createElement('div');t.className='tab'+(s.live?' live':' off')+(s.temp?' temp':'')+(i===0?' active':'');t.dataset.k=s.key;let ret=!s.live?`<span class="ret">${s.ret}</span>`:(s.temp?`<span class="ret">→Jul19</span>`:'');t.innerHTML=`<span class="led"></span>${s.label}${ret}`;if(s.live)t.onclick=()=>switchTab(s.key);tabsEl.appendChild(t);});
-function switchTab(k){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.k===k));document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-'+k).classList.add('active');}
+SPORTS.forEach((s,i)=>{const t=document.createElement('button');t.type='button';t.className='tab'+(s.live?' live':' off')+(i===0?' active':'');t.dataset.k=s.key;t.setAttribute('role','tab');t.setAttribute('aria-selected',i===0?'true':'false');if(!s.live){t.setAttribute('aria-disabled','true');t.setAttribute('aria-label',s.label+' (out of season)');}let ret=!s.live?`<span class="ret">${s.ret}</span>`:'';t.innerHTML=`<span class="led" aria-hidden="true"></span>${s.label}${ret}`;if(s.live)t.onclick=()=>switchTab(s.key);tabsEl.appendChild(t);});
+function switchTab(k){document.querySelectorAll('.tab').forEach(t=>{const on=t.dataset.k===k;t.classList.toggle('active',on);t.setAttribute('aria-selected',on?'true':'false');});document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('view-'+k).classList.add('active');}
 const viewsEl=document.getElementById('views');
-function mkView(k,a){const v=document.createElement('div');v.className='view'+(a?' active':'');v.id='view-'+k;return v;}
+function mkView(k,a){const v=document.createElement('div');v.className='view'+(a?' active':'');v.id='view-'+k;v.setAttribute('role','tabpanel');v.setAttribute('aria-label',k+' games');return v;}
 // sort: sharp grade desc (S→D), then value, then time
 function sortKey(c){const g=c.sharp_grade?GORDER[c.sharp_grade.grade]:0;const val=c.has_value?0.5:0;return g+val;}
 function buildSportView(key,label,active){
@@ -1154,8 +1097,8 @@ function buildSportView(key,label,active){
   const graded=sorted.filter(c=>c.sharp_grade);
   const ungraded=sorted.filter(c=>!c.sharp_grade);
   let h='';
-  if(graded.length)h+=`<div class="sect">sharp board · S → D<span class="ct">${graded.length} graded</span></div>`+graded.map(gameCard).join('');
-  if(ungraded.length)h+=`<div class="sect">${graded.length?'no sharp signal':'full slate'}<span class="ct">${ungraded.length}</span></div>`+ungraded.map(gameCard).join('');
+  if(graded.length)h+=`<h2 class="sect">sharp board · S → D<span class="ct">${graded.length} graded</span></h2>`+graded.map(gameCard).join('');
+  if(ungraded.length)h+=`<h2 class="sect">${graded.length?'no sharp signal':'full slate'}<span class="ct">${ungraded.length}</span></h2>`+ungraded.map(gameCard).join('');
   v.innerHTML=h;viewsEl.appendChild(v);
 }
 buildSportView('mlb','MLB',true);
@@ -1169,11 +1112,13 @@ function showView(which){
   if(which==='results'){
     board.style.display='none'; results.style.display='block';
     tb.classList.remove('active'); tr.classList.add('active');
+    tb.setAttribute('aria-pressed','false'); tr.setAttribute('aria-pressed','true');
     if(!_resultsBuilt){ renderResults(); _resultsBuilt=true; }
     window.scrollTo(0,0);
   } else {
     results.style.display='none'; board.style.display='block';
     tr.classList.remove('active'); tb.classList.add('active');
+    tr.setAttribute('aria-pressed','false'); tb.setAttribute('aria-pressed','true');
     window.scrollTo(0,0);
   }
 }
@@ -1205,12 +1150,12 @@ function renderResults(){
     ['S','A','B','C','D','value flag'].forEach(k=>{const r=sh.rows[k];if(!r)return;
       const thin=r.graded<30?'<span class="thin2"> small</span>':'';
       srows+=`<tr><td class="g" style="color:${GC[k]||'#9aa6b6'}">${k}</td><td>${r.graded}/${r.n}${thin}</td><td>${r.win_pct==null?'-':r.win_pct+'%'}</td><td class="${cls(r.flat_pl||0)}">${r.flat_roi==null?'-':(r.flat_roi>=0?'+':'')+r.flat_roi+'%'}</td><td>${r.fair_avg==null?'-':pct(r.fair_avg)}${r.fair_n?` <span class="thin2">n=${r.fair_n}</span>`:''}</td></tr>`;});
-    return `<div class="rsect">Signal lab (shadow board, not bets)</div><table class="rtable"><tr><th>Signal</th><th>Graded/Logged</th><th>Win%</th><th>Flat ROI</th><th>EV at close</th></tr>${srows}</table><div class="rnote">Every sharp lean S through D (sharp-side moneyline at Bovada, entry frozen at first sighting) and every value flag is logged here at ZERO units, purely to measure the signals the tool sees but does not bet. EV at close is the same headline metric as above, measured closes only. Flat ROI assumes 1u on every row. Excluded from the record, tracker, level gates, and the pre-registered endpoint. A row means little before ~30 graded.${sh.pending?' '+sh.pending+' pending.':''}</div>`;
+    return `<h2 class="rsect">Signal lab (shadow board, not bets)</h2><table class="rtable"><tr><th scope="col">Signal</th><th scope="col">Graded/Logged</th><th scope="col">Win%</th><th scope="col">Flat ROI</th><th scope="col">EV at close</th></tr>${srows}</table><div class="rnote">Every sharp lean S through D (sharp-side moneyline at Bovada, entry frozen at first sighting) and every value flag is logged here at ZERO units, purely to measure the signals the tool sees but does not bet. EV at close is the same headline metric as above, measured closes only. Flat ROI assumes 1u on every row. Excluded from the record, tracker, level gates, and the pre-registered endpoint. A row means little before ~30 graded.${sh.pending?' '+sh.pending+' pending.':''}</div>`;
   }
   if(!o.n){
     host.innerHTML=healthStrip()+`<div class="rempty"><h3>No settled bets yet</h3><p>Your results build automatically as recommended games finish. Check back after a few slates.</p></div>`
     +shadowLab()+`
-    <div class="rsect">Raw data</div><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div>
+    <h2 class="rsect">Raw data</h2><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div>
     <div class="rnote">bets.csv = every recommended play and its result. snapshots.csv = each run's readings, for edge-over-time analysis.</div>`;
     return;
   }
@@ -1233,24 +1178,24 @@ function renderResults(){
   const cs=S.clv_seg;
   if(cs&&cs.rows&&cs.rows.length&&S.clv&&S.clv.fair_n>=10){ h+=`<div class="rcard"><b>EV-at-close by segment</b> <span class="rnote">(exploratory only; the pre-registered endpoint is the overall number)</span>${cs.rows.map(r=>`<div class="rnote">${r.k}: ${pct(r.avg)} (n=${r.n})</div>`).join('')}</div>`; }
   h+=`<div class="rcard"><b>What normal variance looks like</b> (simulation at this tool's price and stake profile, 20k trials of 100 bets): even a model with a REAL +3.5% edge hits a median max drawdown of ~15u and an 8-loss streak, and still finishes negative about 40% of the time; a no-edge model lands anywhere in roughly -26u to +26u. At this sample size, judge the model on EV at close and CLV, not on the W/L record.</div>`;
-  h+=`<div class="rsect">By stated EV</div>`+simpleTbl(S.by_ev);
+  h+=`<h2 class="rsect">By stated EV</h2>`+simpleTbl(S.by_ev);
   // by grade
-  h+=`<div class="rsect">By sharp grade</div>`+gradeTbl(S.by_grade);
+  h+=`<h2 class="rsect">By sharp grade</h2>`+gradeTbl(S.by_grade);
   // Signal lab (shadow ledger): the answer to "do C leans or raw value flags carry
   // EV" lives here, on real closes, without ever risking a unit on them.
   h+=shadowLab();
-  if(S.cumulative&&S.cumulative.length>1) h+=`<div class="rsect">Cumulative units</div><div class="rcard">${lineChart(S.cumulative,ud)}</div>`;
-  h+=`<div class="rsect">Units won by grade</div><div class="rcard">${gradeBars(S.by_grade)}</div>`;
-  h+=`<div class="rsect">By unit size</div>`+simpleTbl(S.by_units);
-  h+=`<div class="rsect">By signal type</div>`+simpleTbl(S.by_signal);
-  h+=`<div class="rsect">By price range</div>`+simpleTbl(S.by_price);
-  h+=`<div class="rsect">By market</div>`+simpleTbl(S.by_market);
-  h+=`<div class="rsect">By time until game</div>`+simpleTbl(S.by_htg);
+  if(S.cumulative&&S.cumulative.length>1) h+=`<h2 class="rsect">Cumulative units</h2><div class="rcard">${lineChart(S.cumulative,ud)}</div>`;
+  h+=`<h2 class="rsect">Units won by grade</h2><div class="rcard">${gradeBars(S.by_grade)}</div>`;
+  h+=`<h2 class="rsect">By unit size</h2>`+simpleTbl(S.by_units);
+  h+=`<h2 class="rsect">By signal type</h2>`+simpleTbl(S.by_signal);
+  h+=`<h2 class="rsect">By price range</h2>`+simpleTbl(S.by_price);
+  h+=`<h2 class="rsect">By market</h2>`+simpleTbl(S.by_market);
+  h+=`<h2 class="rsect">By time until game</h2>`+simpleTbl(S.by_htg);
   if(S.edge_by_htg&&Object.keys(S.edge_by_htg).length){
     let rows=Object.entries(S.edge_by_htg).map(([k,v])=>`<tr><td>${k}</td><td class="g">${v} pts</td></tr>`).join('');
-    h+=`<div class="rsect">Avg sharp gap by time-to-game</div><div class="rcard"><table class="rtable"><tr><th>Hours out</th><th>Avg gap</th></tr>${rows}</table><div class="rnote">Bigger gaps closer to game time = sharp money arriving late (bet later). Bigger early = bet early. Needs a couple weeks of data to trust.</div></div>`;
+    h+=`<h2 class="rsect">Avg sharp gap by time-to-game</h2><div class="rcard"><table class="rtable"><tr><th scope="col">Hours out</th><th scope="col">Avg gap</th></tr>${rows}</table><div class="rnote">Bigger gaps closer to game time = sharp money arriving late (bet later). Bigger early = bet early. Needs a couple weeks of data to trust.</div></div>`;
   }
-  h+=`<div class="rsect">Raw data</div><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div><div class="rnote">Every bet and snapshot, for your own sorting.</div>`;
+  h+=`<h2 class="rsect">Raw data</h2><div class="dlrow"><a href="bets.csv" download>⬇ bets.csv</a><a href="snapshots.csv" download>⬇ snapshots.csv</a></div><div class="rnote">Every bet and snapshot, for your own sorting.</div>`;
   host.innerHTML=h;
 
   function badge(g){return `<td class="g" style="color:${GC[g]||'#888'}">${g}</td>`;}
@@ -1260,13 +1205,13 @@ function renderResults(){
     ['S','A','B','C','D'].forEach(g=>{const r=d[g];if(!r)return;const thin=r.n<8?'<span class="thin2"> small</span>':'';
       rows+=`<tr>${badge(g)}<td>${r.n}${thin}</td><td>${r.win_pct==null?'-':r.win_pct+'%'}</td><td class="${cls(r.units_pl)}">${r.units_pl>=0?'+':''}${r.units_pl}u</td><td class="${cls(r.roi||0)}">${r.roi==null?'-':r.roi+'%'}</td><td class="${cls(r.dollars)}">${r.dollars>=0?'+$':'-$'}${Math.abs(r.dollars)}</td></tr>`;});
     if(!rows)return '<div class="rcard thin2">Not enough graded bets yet.</div>';
-    return `<table class="rtable"><tr><th>Grade</th><th>Bets</th><th>Win%</th><th>Units</th><th>ROI</th><th>$</th></tr>${rows}</table><div class="rnote">"small" = under 8 bets, don't over-read it. You want ROI to rank S ≥ A ≥ B; if it's scrambled, the grading needs tuning.</div>`;
+    return `<table class="rtable"><tr><th scope="col">Grade</th><th scope="col">Bets</th><th scope="col">Win%</th><th scope="col">Units</th><th scope="col">ROI</th><th scope="col">$</th></tr>${rows}</table><div class="rnote">"small" = under 8 bets, don't over-read it. You want ROI to rank S ≥ A ≥ B; if it's scrambled, the grading needs tuning.</div>`;
   }
   function simpleTbl(d){
     if(!d||!Object.keys(d).length)return '<div class="rcard thin2">No data yet.</div>';
     let rows=Object.entries(d).map(([k,r])=>{const thin=r.n<8?'<span class="thin2"> sm</span>':'';
       return `<tr><td>${k}</td><td>${r.n}${thin}</td><td>${r.win_pct==null?'-':r.win_pct+'%'}</td><td class="${cls(r.units_pl)}">${r.units_pl>=0?'+':''}${r.units_pl}u</td><td class="${cls(r.roi||0)}">${r.roi==null?'-':r.roi+'%'}</td></tr>`;}).join('');
-    return `<table class="rtable"><tr><th></th><th>Bets</th><th>Win%</th><th>Units</th><th>ROI</th></tr>${rows}</table>`;
+    return `<table class="rtable"><tr><th scope="col"></th><th scope="col">Bets</th><th scope="col">Win%</th><th scope="col">Units</th><th scope="col">ROI</th></tr>${rows}</table>`;
   }
   function gradeBars(d){
     const vals=['S','A','B','C','D'].map(g=>d&&d[g]?d[g].units_pl:0);
@@ -1280,7 +1225,7 @@ function renderResults(){
     const pts=pairs.map((p,i)=>{const x=pad+i/(pairs.length-1||1)*(W-2*pad);const y=H-pad-((p[1]-mn)/rng)*(H-2*pad);return [x,y];});
     const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
     const zeroY=H-pad-((0-mn)/rng)*(H-2*pad);const last=vals[vals.length-1];
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="#232b36" stroke-dasharray="3 3"/><path d="${path}" fill="none" stroke="${last>=0?'#34d399':'#f87171'}" stroke-width="2.5"/><circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="4" fill="${last>=0?'#34d399':'#f87171'}"/><text x="${pad}" y="12" fill="#5c6673" font-size="11" font-family="monospace">${mx>=0?'+':''}${mx}u</text><text x="${pad}" y="${H-3}" fill="#5c6673" font-size="11" font-family="monospace">${mn}u</text></svg>`;
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%"><line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="#232b36" stroke-dasharray="3 3"/><path d="${path}" fill="none" stroke="${last>=0?'#34d399':'#f87171'}" stroke-width="2.5"/><circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="4" fill="${last>=0?'#34d399':'#f87171'}"/><text x="${pad}" y="12" fill="#9aa6b6" font-size="11" font-family="monospace">${mx>=0?'+':''}${mx}u</text><text x="${pad}" y="${H-3}" fill="#9aa6b6" font-size="11" font-family="monospace">${mn}u</text></svg>`;
   }
 }
 
@@ -1414,7 +1359,20 @@ def _bkey(p):
 def load_log(path):
     if os.path.exists(path):
         try: return json.load(open(path))
-        except: pass
+        except Exception:
+            # A corrupt or half-written betlog must NEVER be silently replaced: the
+            # caller saves right over it, so returning an empty log here would wipe all
+            # history with no signal. Preserve the raw bytes to a timestamped sidecar
+            # and alarm loudly, so the record is recoverable.
+            try:
+                if os.path.getsize(path)>0:
+                    import shutil
+                    bak=f"{path}.corrupt-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+                    shutil.copyfile(path, bak)
+                    print(f"  !! WARNING: {os.path.basename(path)} did not parse as JSON. "
+                          f"Backed up the existing bytes to {os.path.basename(bak)} before "
+                          f"continuing. History was NOT lost, restore from that file if needed.")
+            except Exception: pass
     return {'plays':[]}
 def save_log(path, log): json.dump(log, open(path,'w'), indent=2, default=str)
 def log_plays(path, recs):
@@ -2080,6 +2038,7 @@ def main():
                             'grade':sg['grade'] if sg else None,'rec':rec,'sg':sg,'has_value':c.get('has_value'),
                             'status':c.get('status'),'units':c.get('units'),'units_reason':c.get('units_reason'),
                             'ev':vp.get('ev'),'fair':vp.get('fair'),'fair_mult':vp.get('fair_mult'),'anchor':vp.get('anchor'),
+                            'pin_age_min':c.get('pin_age_min'),
                             'unit_dollars':UNIT_DOLLARS})
     top.sort(key=lambda x:(-(2 if x['rec'] and x['rec'].get('double') else 0), -GORD.get(x['grade'],0)))
     allc['_top']=top
@@ -2151,9 +2110,16 @@ def main():
             # pitcher changed THIS run sits out one cycle: the market is mid-move on
             # news and our anchor may itself be stale (information-window rule).
             _skip=None
-            if scratches and str(play.get('mlb_gamePk')) in scratches:
+            # gamePk lives on the MLB context, not on `play` (the context fields are
+            # attached only AFTER this block, so play.get('mlb_gamePk') was always None
+            # and this suppression never fired). Read it from mlb_ctx; scratch keys are
+            # str(gamePk). The rec's market-type key is 'type', not 'rec_type' (that key
+            # only exists on `play`), and pin_age_min is now threaded onto `t` above, so
+            # both suppressions can finally fire as the v14 comment intended.
+            _gp=(mlb_ctx.get((t['away'],t['home'])) or {}).get('mlb_gamePk') if t.get('sport')=='mlb' else None
+            if scratches and _gp is not None and str(_gp) in scratches:
                 _skip='news'
-            elif r.get('rec_type')=='value' and r.get('anchor')=='pinnacle' and (t.get('pin_age_min') or 0)>PIN_STALE_MIN:
+            elif r.get('type')=='value' and r.get('anchor')=='pinnacle' and (t.get('pin_age_min') or 0)>PIN_STALE_MIN:
                 _skip='stale'
             if _skip:
                 if _skip=='news':

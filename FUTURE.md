@@ -47,7 +47,9 @@
 - **Close is approximate** (see item 2). Since v11 every play carries close_obs and the stats report coverage, so the approximation is measured instead of assumed. Label it honestly everywhere.
 - **Doubleheaders** are skipped rather than graded (deliberate).
 - **API budget** is the binding constraint on everything: 6 credits per full run, 2 per close run, ~420 of the ~500/month free tier already committed to the schedule.
-- **The repo is public** (free Pages requires it). The API key lives only in the `ODDS_KEY` secret or a gitignored `odds_key.txt`; never reintroduce a hardcoded fallback (the pre-v10 key was exposed in git history and had to be rotated).
+- **The repo is public** (free Pages requires it). The API key lives only in the `ODDS_KEY` secret or a gitignored `odds_key.txt`; never reintroduce a hardcoded fallback (the pre-v10 key was exposed in git history and had to be rotated). NOTE (v14.4): the ignore file had silently been named `gitignore.txt` for a long time, so `odds_key.txt` was NOT actually ignored; it is now a real `.gitignore` (verified). Keep it named `.gitignore`.
+- **Grading is MLB-only by construction (latent bug for other sports).** `collect_results`/`_grade_one` read finals from `boxscore.stats.{away,home}.runs`. When NFL/NBA/NHL/CFB/CBB come into season, their finished games will not populate `runs`, so those bets never grade and void after 72h. Add per-sport final-score parsing (points, goals) before or during each sport's first live week; MLB summer is unaffected. Flagged in the v14.4 remediation.
+- **Inert wrong-day guard in `analyze_game`.** The F45 block near the top of `analyze_game` runs against the splits-only `sharp_map`, so its `an_start`/`_an_same_game` branch never fires; the real wrong-day protection re-applies in `main` (F45/F45b). Harmless, left in place; remove if it ever causes confusion.
 
 *Maintenance rule: read this with HANDOFF.md; move shipped items to the changelog.*
 

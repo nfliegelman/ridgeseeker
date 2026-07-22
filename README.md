@@ -1,6 +1,6 @@
 # RidgeSeeker
 
-Finds real sports betting edges (MLB now; more sports in season) and tracks whether they actually work. Runs itself on GitHub twice a day; you open one web page on your phone.
+Finds real sports betting edges (MLB now; more sports in season) and tracks whether they actually work. Runs itself on GitHub twice a day (plus a cheap close-capture pass that logs no new plays); you open one web page on your phone.
 
 ## How it decides
 - **Fair value:** Pinnacle (the sharpest book in the world) with the vig stripped out. When Pinnacle skips a market, the no-vig median of ~25 books fills in.
