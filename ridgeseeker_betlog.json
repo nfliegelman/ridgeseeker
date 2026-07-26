@@ -10719,11 +10719,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.49,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "New York Yankees",
