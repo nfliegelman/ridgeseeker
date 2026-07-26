@@ -10062,12 +10062,12 @@
       "event_id": "210e6566d3641ee245e8a099a1679244",
       "model_version": "2026-07-21.v14-suppressfix1",
       "run_ts": "2026-07-26T16:07:06.802522+00:00",
-      "close_price": 164,
-      "close_fair": 0.3592489888723171,
+      "close_price": 178,
+      "close_fair": 0.3370966788868955,
       "close_anchor": "pinnacle",
       "close_point": null,
-      "close_ts": "2026-07-26T16:07:06.802522+00:00",
-      "close_obs": 0,
+      "close_ts": "2026-07-26T22:29:13.341159+00:00",
+      "close_obs": 1,
       "clv": null,
       "clv_fair": null,
       "hours_to_game": 7.23,
@@ -10143,11 +10143,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.92,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Arizona Diamondbacks",
@@ -10190,11 +10191,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.42,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Atlanta Braves",
@@ -10237,11 +10239,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.54,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Toronto Blue Jays",
@@ -10284,11 +10287,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.43,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Chicago Cubs",
@@ -10331,11 +10335,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.02,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Kansas City Royals",
@@ -10378,11 +10383,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.58,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Los Angeles Dodgers",
@@ -10425,11 +10431,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.51,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "San Diego Padres",
@@ -10472,11 +10479,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.47,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Athletics",
@@ -10519,11 +10527,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.68,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Houston Astros",
@@ -10566,11 +10575,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.06,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_measured": false
     },
     {
       "away": "Cincinnati Reds",
@@ -10613,11 +10623,12 @@
       "close_point": null,
       "close_ts": "2026-07-26T16:07:06.802522+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.89,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": false
     },
     {
       "away": "Seattle Mariners",
@@ -10654,17 +10665,18 @@
       "nb": 28,
       "pin_price": -108,
       "pin_opp": 100,
-      "close_price": -114,
-      "close_fair": 0.5097005466611757,
-      "close_anchor": "pinnacle",
+      "close_price": 111,
+      "close_fair": 0.45470224710993035,
+      "close_anchor": "consensus",
       "close_point": null,
-      "close_ts": "2026-07-26T16:07:06.802522+00:00",
-      "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "close_ts": "2026-07-26T22:29:13.341185+00:00",
+      "close_obs": 1,
+      "clv": -11.03,
+      "clv_fair": -14.64,
       "date": "2026-07-26",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_measured": true
     },
     {
       "away": "Los Angeles Angels",
@@ -10748,12 +10760,12 @@
       "nb": 28,
       "pin_price": 169,
       "pin_opp": -186,
-      "close_price": 164,
-      "close_fair": 0.3592489888723171,
+      "close_price": 178,
+      "close_fair": 0.3370966788868955,
       "close_anchor": "pinnacle",
       "close_point": null,
-      "close_ts": "2026-07-26T16:07:06.802522+00:00",
-      "close_obs": 0,
+      "close_ts": "2026-07-26T22:29:13.341197+00:00",
+      "close_obs": 1,
       "clv": null,
       "clv_fair": null,
       "date": "2026-07-26",
