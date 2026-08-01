@@ -13845,11 +13845,13 @@
       "close_point": null,
       "close_ts": "2026-08-01T22:26:30.481185+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.43,
       "date": "2026-08-01",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.23,
+      "clv_measured": false
     },
     {
       "away": "Milwaukee Brewers",
@@ -13886,18 +13888,20 @@
       "nb": 28,
       "pin_price": -145,
       "pin_opp": 133,
-      "close_price": -154,
-      "close_fair": 0.5821206263916903,
-      "close_fair_mult": 0.5796517114180321,
+      "close_price": -153,
+      "close_fair": 0.581210898686288,
+      "close_fair_mult": 0.578961899503037,
       "close_anchor": "pinnacle",
       "close_point": null,
-      "close_ts": "2026-08-01T22:26:30.481185+00:00",
-      "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "close_ts": "2026-08-01T23:40:37.670953+00:00",
+      "close_obs": 1,
+      "clv": -0.26,
+      "clv_fair": -4.14,
       "date": "2026-08-01",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.51,
+      "clv_measured": true
     }
   ]
 }
