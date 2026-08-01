@@ -8,14 +8,25 @@ on:
     - cron: '30 21 * * *'
     # 22:45 UTC close-capture: h2h only, refreshes closes before the East slate
     - cron: '45 22 * * *'
-    # ---- EXPANDED SCHEDULE: uncomment ONLY after the F26 verification curl passes
-    # ---- AND RS_BOOKMAKERS below is set to '1'. Without F26 this schedule costs
-    # ---- ~660 credits/month and dies mid-month; with it, ~330.
-    # 13:30 UTC observe: opener board, snapshots + closes, NEVER logs plays
+    # 01:45 UTC close-capture: West-coast slate closes (v14.5). Roughly doubles
+    # measured-close coverage, the binding constraint on the pre-registered
+    # clv_fair endpoint. MLB-only summer: 16 credits/day, ~496/31-day month,
+    # inside the free 500. Multi-sport autumn needs RS_BOOKMAKERS or the $30
+    # plan regardless — the startup CREDIT WARNING prints the projection.
+    - cron: '45 1 * * *'
+    # ---- 13:30 UTC observe (opener board, snapshots + closes, NEVER logs plays):
+    # ---- uncomment ONLY after a `mode: verify` dispatch run prints PASS and
+    # ---- RS_BOOKMAKERS below is set to '1'. Without F26 this run costs 6
+    # ---- credits/day and blows the free tier; with it the whole expanded
+    # ---- schedule is ~10 credits/day.
     # - cron: '30 13 * * *'
-    # 01:45 UTC close-capture: West-coast slate closes
-    # - cron: '45 1 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode (verify = F26 billing/coverage pre-flight, ~4 credits, no plays)'
+        type: choice
+        options: [full, close, observe, verify]
+        default: full
 
 permissions:
   contents: write
@@ -31,13 +42,20 @@ jobs:
       - name: Run RidgeSeeker
         env:
           ODDS_KEY: ${{ secrets.ODDS_KEY }}
-          RS_MODE: ${{ (github.event.schedule == '45 22 * * *' || github.event.schedule == '45 1 * * *') && 'close' || (github.event.schedule == '30 13 * * *' && 'observe' || 'full') }}
+          # Manual dispatch uses the chosen mode; scheduled runs map by cron entry.
+          RS_MODE: ${{ inputs.mode || ((github.event.schedule == '45 22 * * *' || github.event.schedule == '45 1 * * *') && 'close' || (github.event.schedule == '30 13 * * *' && 'observe' || 'full')) }}
           # F26 named-bookmaker fetch. '0' = OFF (regions=us,eu, current billing).
-          # Set to '1' ONLY after the verification curl confirms MLB coverage and
-          # h2h_lay billing (AUDIT_TODO batch 3). Full run drops 6 -> 3 credits.
+          # Set to '1' ONLY after a `mode: verify` dispatch run prints PASS
+          # (checks Bovada/Pinnacle coverage AND that exchange h2h_lay rows do
+          # not bill as an extra market). Full run drops 6 -> 3 credits, close 2 -> 1.
           RS_BOOKMAKERS: '0'
+          # Odds API monthly credit allowance, for the startup over-budget warning.
+          # Set to '20000' after upgrading to the $30 plan (needed before the
+          # multi-sport autumn: 4-5 active sports cannot fit any free-tier schedule).
+          RS_PLAN_CREDITS: '500'
         run: python ridgeseeker.py
       - name: Commit results
+        # verify mode writes nothing; the guard below makes that a clean no-op
         run: |
           git config user.name "ridgeseeker-bot"
           git config user.email "actions@users.noreply.github.com"

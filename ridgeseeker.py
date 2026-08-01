@@ -175,8 +175,9 @@ def active_sports():
     return [s for s in SPORTS if s['enabled'] and m in s['months']]
 
 # Your Odds API plan's monthly credits; used only to WARN when the active-sport
-# schedule projects over budget. Set to 20000 after upgrading.
-PLAN_CREDITS = 500
+# schedule projects over budget. After upgrading to the $30 20K plan, set
+# RS_PLAN_CREDITS: '20000' in the workflow env (no code edit needed).
+PLAN_CREDITS = int(os.environ.get("RS_PLAN_CREDITS", "500") or "500")
 
 # Per-sport sharp-grade thresholds (gap = money% minus tickets% on the sharp side).
 # Anchored to the real MLB gap distribution: median ~9, 75th pctile ~15, 90th ~22.
@@ -275,6 +276,29 @@ def gj(url, t=40, retries=3):
                 last = e; break      # network/timeout, wait then retry
         time.sleep(1)
     if last: raise last
+
+def gj_hdr(url, t=40):
+    """gj() variant that also returns the response headers (needed by RS_MODE=verify
+    to read the Odds API x-requests-last billing header). Single pass through the
+    SSL tiers, no retry loop: verify mode is interactive-ish and a failure should
+    surface immediately rather than burn credits retrying."""
+    global _SSL_TIERS, _SSL_WORKING_IDX
+    if _SSL_TIERS is None:
+        _SSL_TIERS = _ssl_tiers()
+    idxs = list(range(len(_SSL_TIERS)))
+    if _SSL_WORKING_IDX is not None:
+        idxs = [_SSL_WORKING_IDX] + [j for j in idxs if j != _SSL_WORKING_IDX]
+    last = None
+    for j in idxs:
+        try:
+            resp = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=t, context=_SSL_TIERS[j])
+            _SSL_WORKING_IDX = j
+            return json.load(resp), dict(resp.headers)
+        except ssl.SSLError as e:
+            last = e; continue
+        except Exception as e:
+            last = e; break
+    raise last
 
 def am2prob(o): o=float(o); return (-o)/(-o+100) if o<0 else 100/(o+100)
 def am2dec(o):  o=float(o); return 1+(o/100 if o>0 else 100/(-o))
@@ -1437,6 +1461,7 @@ def build_shadow_plays(allc, now_iso):
                                 'anchor':mlp.get('anchor'),'nb':mlp.get('nb'),
                                 'pin_price':mlp.get('pin_price'),'pin_opp':mlp.get('pin_opp'),
                                 'close_price':mlp['price'],'close_fair':mlp.get('fair'),
+                                'close_fair_mult':mlp.get('fair_mult'),
                                 'close_anchor':mlp.get('anchor'),'close_point':None,
                                 'close_ts':now_iso,'close_obs':0,'clv':None,'clv_fair':None})
             v=c.get('value_play')
@@ -1453,6 +1478,7 @@ def build_shadow_plays(allc, now_iso):
                             'anchor':v.get('anchor'),'nb':v.get('nb'),
                             'pin_price':v.get('pin_price'),'pin_opp':v.get('pin_opp'),
                             'close_price':v['price'],'close_fair':v.get('fair'),
+                            'close_fair_mult':v.get('fair_mult'),
                             'close_anchor':v.get('anchor'),'close_point':v.get('point'),
                             'close_ts':now_iso,'close_obs':0,'clv':None,'clv_fair':None})
     return out
@@ -1565,6 +1591,13 @@ def grade_pending(path, results):
         if cf is not None:
             try: p['clv_fair']=round((float(cf)*am2dec(p['price'])-1)*100,2)
             except Exception: p['clv_fair']=None
+        # exploratory twin under proportional devig (v14.5, log-only): lets the
+        # dog-vs-favorite EV split be tested for devig-method sensitivity. Never a
+        # gate or endpoint; the pre-registered clv_fair (power) stands unchanged.
+        cfm=p.get('close_fair_mult')
+        if cfm is not None:
+            try: p['clv_fair_mult']=round((float(cfm)*am2dec(p['price'])-1)*100,2)
+            except Exception: p['clv_fair_mult']=None
         p['clv_measured']=bool((p.get('close_obs') or 0)>0)
     # Void pass: a play still pending 72h after its scheduled start is voided.
     # The score backfill covers 3 days; if that window produced no matchable final,
@@ -1633,6 +1666,11 @@ def update_closes(path, allc):
                     # available) powers clv_fair, the market's final EV verdict
                     if pl.get('fair') is not None:
                         p['close_fair']=pl['fair']; p['close_anchor']=pl.get('anchor')
+                        # proportional-devig close beside the power close (v14.5,
+                        # capture-or-lose): novig() logs both methods at ENTRY so they
+                        # can be compared on results, but the close only kept the power
+                        # number, so the comparison was impossible. Log-only.
+                        p['close_fair_mult']=pl.get('fair_mult')
                     p['close_point']=pl.get('point')
                     p['close_ts']=datetime.now(timezone.utc).isoformat()
                     p['close_obs']=int(p.get('close_obs') or 0)+1
@@ -1692,7 +1730,16 @@ def collect_results(sharp_raw_by_league):
                 for t in g.get('teams',[]):
                     if t['id']==tid: return t.get('full_name')
             bs=g.get('boxscore') or {}; stats=bs.get('stats') or {}
+            # Per-sport finals (v14.5): boxscore.stats.{away,home}.runs exists ONLY for
+            # baseball; basketball finals arrive with stats={} (verified live on WNBA).
+            # boxscore.total_{away,home}_points is the sport-generic final score:
+            # verified equal to runs on 42/42 completed MLB games across 4 days and
+            # populated on every completed WNBA game checked. Baseball keeps the
+            # proven runs path; every other sport reads the generic totals, which
+            # reflect the official final (incl. OT/SO) — exactly what books settle on.
             ar=(stats.get('away') or {}).get('runs'); hr=(stats.get('home') or {}).get('runs')
+            if ar is None or hr is None:
+                ar,hr=bs.get('total_away_points'),bs.get('total_home_points')
             if ar is None or hr is None: continue
             k=(nm(g['away_team_id']),nm(g['home_team_id']))
             entry={'away_runs':ar,'home_runs':hr,'start':g.get('start_time')}
@@ -1933,6 +1980,67 @@ def compute_stats(log_path, snap_path, unit_dollars):
             'edge_by_htg':edge_time,
             'unit_dollars':unit_dollars}
 
+# ============================ F26 VERIFY MODE ============================
+def run_verify(_asp):
+    """RS_MODE=verify (v14.5): the F26 pre-flight, one click from the Actions tab
+    (workflow_dispatch -> mode: verify) instead of owner laptop curls. Answers the
+    two questions AUDIT_TODO F26 requires before RS_BOOKMAKERS=1: (a) do the curated
+    10 books actually carry each active sport (Bovada executable + Pinnacle anchor
+    above all), and (b) does the request bill as expected, or do exchange h2h_lay
+    rows count as a second market and double the h2h bill. Reads the official
+    x-requests-last header, so the verdict is the biller's own number, not a guess.
+    Cost: 1 credit per active sport + ~3 for the 3-market probe on the first sport.
+    Prints a verdict; fetches nothing else, logs nothing, changes no behavior."""
+    print(f"F26 VERIFY: bookmakers-param billing + coverage check ({len(_asp)} active sport(s))")
+    print(f"  curated list: {BOOKMAKERS_CURATED}\n")
+    def _cost(hdrs):
+        for k,v in hdrs.items():
+            if k.lower()=='x-requests-last':
+                try: return float(v)
+                except Exception: return None
+        return None
+    ok=True; checked=0
+    for i,sp in enumerate(_asp):
+        url=(f"https://api.the-odds-api.com/v4/sports/{sp['odds']}/odds/?apiKey={ODDS_KEY}"
+             f"&bookmakers={BOOKMAKERS_CURATED}&markets=h2h&oddsFormat=american")
+        try: games,hdrs=gj_hdr(url)
+        except Exception as e:
+            print(f"  [{sp['key'].upper()}] fetch FAILED: {e}"); ok=False; continue
+        cost=_cost(hdrs); checked+=1
+        n=len(games or [])
+        bov=sum(1 for g in games for b in g.get('bookmakers',[]) if b.get('key')=='bovada')
+        pin=sum(1 for g in games for b in g.get('bookmakers',[]) if b.get('key')=='pinnacle')
+        lay=sum(1 for g in games for b in g.get('bookmakers',[]) for m in b.get('markets',[])
+                if m.get('key') not in ('h2h',))
+        per_book={}
+        for g in games:
+            for b in g.get('bookmakers',[]): per_book[b.get('key')]=per_book.get(b.get('key'),0)+1
+        print(f"  [{sp['key'].upper()}] {n} game(s) · billed {cost} credit(s) (expect 1.0)"
+              f" · Bovada {bov}/{n} · Pinnacle {pin}/{n} · non-h2h market rows: {lay}")
+        print(f"      per-book coverage: {sorted(per_book.items(), key=lambda x:-x[1])}")
+        if cost is not None and cost>1: ok=False; print("      !! h2h billed >1 credit: lay/extra markets are billing as their own market")
+        if n and bov==0: ok=False; print("      !! Bovada absent: the executable book is not in this feed")
+        if n and pin==0: print("      ! Pinnacle absent: anchor falls back to consensus (works, but weaker)")
+    if _asp:
+        sp=_asp[0]
+        url=(f"https://api.the-odds-api.com/v4/sports/{sp['odds']}/odds/?apiKey={ODDS_KEY}"
+             f"&bookmakers={BOOKMAKERS_CURATED}&markets=h2h,spreads,totals&oddsFormat=american")
+        try:
+            games,hdrs=gj_hdr(url); cost=_cost(hdrs)
+            print(f"\n  [{sp['key'].upper()}] 3-market probe billed {cost} credit(s) (expect 3.0)")
+            if cost is not None and cost>3: ok=False; print("      !! 3-market request billed >3: exchange lay markets are billing extra")
+            rem=next((v for k,v in hdrs.items() if k.lower()=='x-requests-remaining'),'?')
+            print(f"  credits remaining this cycle: {rem}")
+        except Exception as e:
+            print(f"\n  3-market probe FAILED: {e}"); ok=False
+    print()
+    if checked and ok:
+        print("  VERDICT: PASS. Safe to set RS_BOOKMAKERS: '1' in .github/workflows/ridgeseeker.yml.")
+        print("  That halves credit costs (full 6->3, close 2->1) and MODEL_VERSION auto-appends +bk10.")
+        print("  The commented 13:30 UTC observe cron becomes affordable at that point too.")
+    else:
+        print("  VERDICT: FAIL or inconclusive — leave RS_BOOKMAKERS: '0'. See lines above for which check failed.")
+
 # ============================ MAIN ============================
 def main():
     here=os.path.dirname(os.path.abspath(__file__))
@@ -1947,9 +2055,13 @@ def main():
     run_odds_games=0; run_an_games=0; run_unmatched=0; run_bov_absent=0
     _asp=active_sports()
     _per_full=(3 if BOOKMAKERS_PARAM else 6); _per_close=(1 if BOOKMAKERS_PARAM else 2)
-    _proj=len(_asp)*(2*_per_full+_per_close)*30
+    # 2 full + 2 close runs/day (22:45 East close + 01:45 West close, v14.5), 31-day
+    # month so the warning errs on the safe side of the billing cycle.
+    _proj=len(_asp)*(2*_per_full+2*_per_close)*31
     if _proj>PLAN_CREDITS:
-        print(f"  !! CREDIT WARNING: {len(_asp)} active sport(s) at 2 full + 1 close/day projects ~{_proj}/month vs plan {PLAN_CREDITS}. Fix: fewer sports, RS_BOOKMAKERS after the F26 curl, or the $30 20K plan (set PLAN_CREDITS=20000).")
+        print(f"  !! CREDIT WARNING: {len(_asp)} active sport(s) at 2 full + 2 close/day projects ~{_proj}/month vs plan {PLAN_CREDITS}. Fix: fewer sports, RS_BOOKMAKERS=1 after RS_MODE=verify passes, or the $30 20K plan (then set RS_PLAN_CREDITS=20000 in the workflow).")
+    if RUN_MODE=='verify':
+        run_verify(_asp); return
     raw_payloads=[]
     for sp in active_sports():
         key, skey, kind, an = sp['key'], sp['odds'], sp['kind'], sp['an']
@@ -2052,7 +2164,11 @@ def main():
     # 2. log today's recommended plays with full feature set (grade, gap, hours-to-game)
     todays=[]
     now_iso=datetime.now(timezone.utc).isoformat()
-    mlb_ctx=fetch_mlb_context()   # F29 log-only features, free, one keyless call
+    # F29 log-only features, free, one keyless call. Fetched only while MLB is in
+    # season (v14.5): in a winter NFL/NBA/NHL-only window the call would return an
+    # empty schedule anyway, and every consumer below already handles mlb_ctx={}
+    # (scratches, weather venues, and the per-play ctx join are all sport-gated).
+    mlb_ctx=fetch_mlb_context() if any(sp['key']=='mlb' for sp in _asp) else {}
     ctx_misses=0
     probables_path=os.path.join(here, "ridgeseeker_probables.json")
     scratches=detect_scratches(mlb_ctx, probables_path) if mlb_ctx else {}
@@ -2101,6 +2217,7 @@ def main():
                            # be graded for CLV; close_obs counts post-entry observations
                            # and only close_obs>0 counts as measured (see update_closes)
                            'close_price':r['price'],'close_fair':fair,'close_anchor':anchor,
+                           'close_fair_mult':fmult,
                            'close_point':r.get('point'),'close_ts':now_iso,'close_obs':0,
                            'clv':None,'clv_fair':None,
                            'hours_to_game':hours_until(t['time'])}
@@ -2254,8 +2371,8 @@ def main():
                'bo_price','best_price','best_book','an_ml','probable_changed','probable_changed_post_log',
                'kalshi_ticker','kalshi_bid','kalshi_ask','kalshi_n','kalshi_ev_taker','kalshi_ev_maker',
                'poly_mid','poly_bid','poly_ask','poly_ev_mid','exec_best_venue','exec_best_ev',
-               'close_price','close_fair','close_anchor','close_point','close_ts','close_obs',
-               'close_line_moved','clv','clv_fair','clv_measured',
+               'close_price','close_fair','close_fair_mult','close_anchor','close_point','close_ts','close_obs',
+               'close_line_moved','clv','clv_fair','clv_fair_mult','clv_measured',
                'shadow','shadow_kind',
                'hours_to_game','result','void_reason','units_pl','model_version','event_id'])
     snaps_all=(json.load(open(snap_path)).get('snaps',[]) if os.path.exists(snap_path) else [])
