@@ -14615,11 +14615,13 @@
       "close_point": null,
       "close_ts": "2026-08-02T16:04:58.032838+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.64,
       "date": "2026-08-02",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -4.21,
+      "clv_measured": false
     },
     {
       "away": "San Francisco Giants",
@@ -14663,11 +14665,13 @@
       "close_point": null,
       "close_ts": "2026-08-02T16:04:58.032838+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.88,
       "date": "2026-08-02",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -4.35,
+      "clv_measured": false
     },
     {
       "away": "Boston Red Sox",
