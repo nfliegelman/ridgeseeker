@@ -14029,8 +14029,8 @@
       "close_point": null,
       "close_ts": "2026-08-02T22:27:09.933948+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.2,
+      "clv_fair": -4.58,
       "hours_to_game": 7.27,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -14060,8 +14060,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-08-02",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 2.3,
+      "clv_fair_mult": -3.62,
+      "clv_measured": true
     },
     {
       "away": "Washington Nationals",
@@ -14715,11 +14717,13 @@
       "close_point": null,
       "close_ts": "2026-08-02T22:27:09.933975+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.2,
+      "clv_fair": -4.58,
       "date": "2026-08-02",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -3.62,
+      "clv_measured": true
     }
   ]
 }
