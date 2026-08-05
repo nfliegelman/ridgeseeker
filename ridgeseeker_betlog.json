@@ -16534,11 +16534,13 @@
       "close_point": null,
       "close_ts": "2026-08-05T22:34:11.135583+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.93,
       "date": "2026-08-05",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -5.9,
+      "clv_measured": false
     }
   ]
 }
