@@ -202,6 +202,20 @@ GRADE_THRESHOLDS = {
 # you can bet at it; `avail_price`/`avail_book`/`avail_ev` on each play then price it.
 EXECUTABLE_BOOKS = ('Bovada',)
 
+# Venue types you can actually execute at. EXECUTABLE_BOOKS above is the sportsbook
+# list (Odds API titles); this is the wider set including prediction markets, which
+# arrive on their own feeds and settle as $1 contracts rather than American odds.
+#
+# Measured over the 48 logged plays carrying a quote, the same bet priced:
+#   bovada -4.81% EV  |  polymarket at the ASK -1.40%  |  polymarket at the BID +1.08%
+# Polymarket wins 38/48 with a median 1-cent spread, so routing an already-selected
+# bet there is worth about +3.4 points with no change to what gets bet.
+#
+# Kalshi charges a taker fee (0.07 x P x (1-P) per contract, rounded up per order);
+# Polymarket MLB/NFL/NBA/NHL markets are fee-free. Both are modeled, so the router
+# compares net-of-fee EV and Kalshi does not get credited for money it takes back.
+EXECUTABLE_VENUES = ('bovada', 'polymarket', 'kalshi')
+
 # Sanity gate
 MIN_EV, LONGSHOT_CAP, EV_CEILING, MIN_BOOKS = 0.03, 500, 0.25, 3
 
@@ -1114,9 +1128,18 @@ function recLine(t){
     const others=r.alts.slice(1).map(a=>{const pt=a.point!=null?' '+((+a.point>0?'+':'')+(''+a.point).replace('.0','')):'';return `${a.market}${pt} ${a.price>0?'+'+a.price:a.price}`;}).join(' · ');
     altHtml=`<div class="altmk">or: ${others}</div>`;
   }
+  // Venue routing: same bet, cheaper counter. Only shown when it is NOT Bovada,
+  // because "bet it at Bovada" is the default and does not need saying.
+  let venueHtml='';
+  if(t.bet_venue && t.bet_venue!=='bovada'){
+    const nm={polymarket:'Polymarket',kalshi:'Kalshi'}[t.bet_venue]||t.bet_venue;
+    const px=(t.bet_price!=null && t.bet_price<1)?(Math.round(t.bet_price*100)+'¢'):t.bet_price;
+    const gain=(t.venue_gain!=null)?` · +${(t.venue_gain*100).toFixed(1)} pts vs Bovada`:'';
+    venueHtml=`<div class="altmk"><b>Bet at ${nm}</b> @ ${px}${gain} <span class="thin2">(check depth at your stake)</span></div>`;
+  }
   return `<div class="topplay">
     <div class="tp-l"><span class="tp-grade" style="background:${GC[t.grade]||'#646f7f'}">${t.grade||'•'}</span></div>
-    <div class="tp-mid"><div class="tp-bet">${r.text} ${unitHtml}</div><div class="tp-game">${t.away} @ ${t.home} · ${t.sport} · ${tStr(t.time)}${tpStatus(t.status)}</div>${altHtml}</div>
+    <div class="tp-mid"><div class="tp-bet">${r.text} ${unitHtml}</div><div class="tp-game">${t.away} @ ${t.home} · ${t.sport} · ${tStr(t.time)}${tpStatus(t.status)}</div>${venueHtml}${altHtml}</div>
     <div class="tp-r">${dd||(t.has_value?'<span class="ddtag val">✓ value</span>':'')}</div>
   </div>
   <div class="tp-why">${r.why}${t.units_reason?' · <span class="ureason">'+t.units+'u: '+t.units_reason+'</span>':''}</div>`;
@@ -1391,6 +1414,32 @@ def suggest_units(card):
         return (1.0, "Sharp lean, longshot: price is the reward" if longshot else "Single sharp signal")
     return (None, None)  # C/D no value = skip
 
+def route_venue(cands):
+    """Pick the cheapest executable venue for a bet that has ALREADY been selected.
+
+    `cands` maps venue name -> {'ev','price','dec'}, each priced net of fees at the
+    side we are backing. Returns (venue_name, entry) or (None, None).
+
+    ROUTING DECIDES WHERE THE MONEY GOES, NEVER WHETHER THE BET HAPPENS. That
+    separation is load-bearing and is enforced by the caller only invoking this on
+    plays that already cleared selection. The temptation is obvious — Polymarket
+    prices 10 of 48 logged plays at +3% or better against our devigged Pinnacle fair,
+    which looks exactly like the value engine finally working — and the data says it
+    is a trap. Those ten went 3-7 and closed at -10.16% CLV, the worst bucket in the
+    file, against a model expectation of 46%. Across the whole sample the correlation
+    between "our fair likes it more than Polymarket does" and clv_fair is -0.64: the
+    gap is our Pinnacle snapshot going stale, not a bargain appearing. Polymarket's
+    midpoint sits a mean 0.23 points from our fair with a 3.6-point sd, which is a
+    venue agreeing with us, not a soft book waiting to be picked off. So we take its
+    price and ignore its apparent edge. Letting venue EV open the value gate would
+    rebuild the v15 phantom-edge bug with a different stale denominator.
+    """
+    ok={k:v for k,v in (cands or {}).items()
+        if k in EXECUTABLE_VENUES and v and v.get('ev') is not None and v.get('dec')}
+    if not ok: return None, None
+    best=max(ok, key=lambda k: ok[k]['ev'])
+    return best, ok[best]
+
 def build_recommendation(c, sg):
     plays=c.get('plays',[]); v=c.get('value_play')
     def find_play(mkt,side):
@@ -1644,7 +1693,15 @@ def grade_pending(path, results):
         outcome=_grade_one(p,res)
         if outcome is None: continue
         p['result']=outcome
-        pr=float(p['price']); dec=am2dec(pr); u=float(p['units'])
+        # Grade at the price actually PAID. bet_dec is the decimal-odds equivalent of
+        # the routed venue net of fees (v15.2); plays logged before routing existed, and
+        # any play that routed to Bovada, fall back to the Bovada American price, so
+        # historical rows grade byte-identically. clv/clv_fair stay on the Bovada basis
+        # on purpose: the pre-registered endpoint measures the MODEL against the closing
+        # line, and must not move because execution moved.
+        u=float(p['units'])
+        try: dec=float(p['bet_dec']) if p.get('bet_dec') else am2dec(float(p['price']))
+        except Exception: dec=am2dec(float(p['price']))
         p['units_pl']=0.0 if outcome=='push' else (round(u*(dec-1),2) if outcome=='win' else round(-u,2)); n+=1
         # Closing line value, two flavors:
         # clv      = entry price vs the last pregame BOVADA price seen (same-book line movement).
@@ -2422,6 +2479,43 @@ def main():
             # What switching venue is worth on THIS play, vs the book we actually bet.
             play['venue_gain']=(round(play['exec_best_ev']-_cand['bovada'],4)
                                 if (_cand.get('bovada') is not None and play.get('exec_best_ev') is not None) else None)
+            # ---- VENUE ROUTING (v15.2): where this already-selected bet should go ----
+            # Only venues in EXECUTABLE_VENUES compete. Each entry carries its native
+            # price and the decimal-odds equivalent, so P&L can be graded at the price
+            # actually paid instead of assuming a Bovada fill. A prediction-market
+            # contract bought at P and settling at $1 is decimal 1/P; Kalshi's decimal
+            # is taken net of its per-order taker fee via the same cost basis kalshi_ev
+            # uses, so the router never credits Kalshi for money the fee takes back.
+            _routes={}
+            if _fairp and r.get('price') is not None:
+                _routes['bovada']={'ev':_cand.get('bovada'),'price':r['price'],'dec':am2dec(r['price'])}
+            if play.get('poly_ev_ask') is not None and play.get('poly_ask'):
+                _pa=play['poly_ask']; _pmult=POLY_TAKER_MULT.get(t.get('sport_key'),0.0)
+                _pcost=_pa+(_pmult*_pa*(1-_pa) if _pmult else 0.0)
+                _routes['polymarket']={'ev':play['poly_ev_ask'],'price':_pa,
+                                       'dec':(1.0/_pcost if _pcost>0 else None)}
+            if play.get('kalshi_ev_taker') is not None and play.get('kalshi_ask'):
+                _ka=play['kalshi_ask']; _kn=play.get('kalshi_n') or 1
+                _kcost=_kn*_ka+kalshi_fee(_ka,_kn,KALSHI_TAKER_MULT)
+                _routes['kalshi']={'ev':play['kalshi_ev_taker'],'price':_ka,
+                                   'dec':(_kn/_kcost if _kcost>0 else None)}
+            _bv,_be=route_venue(_routes)
+            play['bet_venue']=_bv
+            play['bet_price']=(_be or {}).get('price')
+            play['bet_dec']=(round(_be['dec'],4) if (_be and _be.get('dec')) else None)
+            play['bet_ev']=(_be or {}).get('ev')
+            # Staleness telemetry, NOT a gate. Positive means our Pinnacle fair rates
+            # this side higher than Polymarket's midpoint does. Over 28 measured rows
+            # that gap correlates -0.64 with clv_fair and the top bucket closed at
+            # -10.16%, so it reads as our anchor drifting rather than an edge. It is
+            # logged for a future suppression rule and deliberately gates nothing at
+            # this sample size — and clv_fair shares the `fair` term, so part of the
+            # relationship is mechanical and must be untangled before it can be trusted.
+            play['pm_disagree']=(round((_fairp-play['poly_mid'])*100,2)
+                                 if (_fairp and play.get('poly_mid')) else None)
+            # thread routing back onto the board row so the dashboard can say WHERE
+            t['bet_venue']=play['bet_venue']; t['bet_price']=play['bet_price']
+            t['bet_ev']=play['bet_ev']; t['venue_gain']=play['venue_gain']
             # our-side AN per-book ML prices (source sweep, log-only)
             _anm=t.get('an_ml') or None
             if _anm and r.get('market')=='Moneyline':
@@ -2510,6 +2604,7 @@ def main():
                'kalshi_ticker','kalshi_bid','kalshi_ask','kalshi_n','kalshi_ev_taker','kalshi_ev_maker',
                'poly_mid','poly_bid','poly_ask','poly_spread','poly_ev_mid','poly_ev_ask','poly_ev_bid',
                'exec_best_venue','exec_best_ev','venue_gain',
+               'bet_venue','bet_price','bet_dec','bet_ev','pm_disagree',
                'close_price','close_fair','close_fair_mult','close_anchor','close_point','close_ts','close_obs',
                'close_line_moved','clv','clv_fair','clv_fair_mult','clv_measured',
                'shadow','shadow_kind',

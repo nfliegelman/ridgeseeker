@@ -9,7 +9,13 @@ Finds real sports betting edges (MLB now; more sports in season) and tracks whet
 - **Unit sizing:** 1u / 1.5u / 2u with a hard +250 longshot cap.
 
 ## The thing that decides whether this makes money
-Not the model — the **number of books you can bet at**. Measured over the same 1,114 legs: the median Bovada price is worth -4.39% EV, the median best-price-in-market is -1.17%, and Bovada holds the best number 2.2% of the time. Every signal in here is worth at most ~1.5 points of edge. One book means the vig is bigger than the edge, and no amount of threshold tuning changes that. Opening one more account is worth more than every model change in this repo combined. Set `EXECUTABLE_BOOKS` in `ridgeseeker.py` when you do; the Results tab reports the running cost until then.
+Not the model — **the price you pay to get the bet on**. Every signal in here is worth at most ~1.5 points of edge, while the median Bovada moneyline costs -4.39% against devigged Pinnacle. On one counter the vig is bigger than the edge and no threshold tuning changes that.
+
+So the tool now routes each selected bet to the cheapest venue you can actually reach (`EXECUTABLE_VENUES`, currently Bovada + Polymarket + Kalshi) and tells you where to put it. Measured on the logged history the same bet prices at -4.81% EV at Bovada versus -1.40% at Polymarket's ask, so routing is worth about +3.4 points per bet with **no change to what gets bet**. Kalshi is compared net of its taker fee. P&L is graded at the price actually paid.
+
+One thing it deliberately does not do: treat a cheap prediction-market quote as a *reason* to bet. Polymarket priced 10 of 48 logged plays at +3%-or-better against our fair, and those ten went 3-7 with -10.16% CLV. That gap is our Pinnacle anchor going stale, not an edge appearing — Polymarket's midpoint agrees with our fair to within a quarter of a point on average. Take its price; ignore its apparent edge.
+
+**Liquidity is the open question.** A quote proves the price existed, not that your stake fits inside it. Check depth at your real bet size before trusting the routing.
 
 ## How it grades itself
 - Every recommended play is logged and graded automatically off final scores.

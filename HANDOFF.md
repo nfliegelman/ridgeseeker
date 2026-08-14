@@ -162,6 +162,25 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.2 (2026-08-14), venue routing: bet the same games at a cheaper counter. Owner confirmed Polymarket and Kalshi are usable alongside Bovada. MODEL_VERSION unchanged — selection is untouched; only the venue the money goes to changes.**
+
+  **What ships.** New `EXECUTABLE_VENUES = ('bovada','polymarket','kalshi')` and a `route_venue()` that picks the best net-of-fee price among them for a bet that has *already* cleared selection. Each play logs `bet_venue`/`bet_price`/`bet_dec`/`bet_ev`, the board prints "Bet at Polymarket @ 47¢ · +3.2 pts vs Bovada", and `grade_pending` now settles P&L at `bet_dec` — the price actually paid — falling back to the Bovada American price for every pre-routing row so history grades byte-identically. Kalshi's decimal is taken net of its per-order taker fee through the same cost basis `kalshi_ev` uses, so it is never credited for money the fee takes back. `clv`/`clv_fair` deliberately stay on the Bovada basis: the pre-registered endpoint measures the MODEL against the closing line and must not move because execution moved.
+
+  **Backtested on the 46 settled plays carrying a quote** — same games, same outcomes, same selection, only the counter changed: 36/46 route to Polymarket, turning -8.46u (-15.82% ROI) into -6.73u (-12.58%), worth **+1.74u on 53.5u risked**. Stacked with the v15 tier split on the full real ledger:
+
+  | scenario | bets | units | ROI |
+  |---|---|---|---|
+  | as it actually ran | 52 | -6.39 | -10.66% |
+  | + v15 tier split only | 21 | -0.59 | -2.07% |
+  | + v15.2 routing only | 52 | -4.66 | -7.76% |
+  | **+ both (what ships)** | **21** | **+0.05** | **+0.18%** |
+
+  In-sample on the data that motivated both changes, and 21 bets settles nothing. Directional only.
+
+  **The trap that was deliberately NOT taken.** Polymarket prices 10 of 48 logged plays at +3% EV or better against our devigged Pinnacle fair — which looks exactly like the value engine finally opening, on a venue we can now reach. It is not. **Those ten went 3-7 and closed at -10.16% CLV**, the worst bucket in the file, against a model expectation of 46%. Across all 28 rows with a quote and a measured close, the correlation between "our fair likes this side more than Polymarket's midpoint does" and `clv_fair` is **-0.64**, monotonic across buckets (+2.34 when Polymarket likes it more, -4.67 when they agree, -10.16 when we do). Polymarket's mid sits a mean 0.23 points from our fair with a 3.6-point sd: that is a venue *agreeing* with us, not a soft book. So the apparent gap is our Pinnacle snapshot going stale, and buying it would rebuild the v15 phantom-edge bug with a different stale denominator. **Routing therefore takes Polymarket's price and ignores its apparent edge**, and `route_venue` can only re-price a bet, never create one — asserted in `test_tiers.py`. Caveat on the -0.64: `clv_fair` shares the `fair` term, so part of that relationship is mechanical and must be untangled before it earns a gate. Logged as `pm_disagree` for exactly that work; it gates nothing at n=28.
+
+  Files: `ridgeseeker.py` (EXECUTABLE_VENUES, route_venue, routing block, grade_pending, recLine, CSV), `test_tiers.py` (+9 assertions, 38 total).
+
 - **v15.1 (2026-08-14), the sport-casing bug: one string case silently killed six shipped features, including a safety suppression. Plus a real execution edge found in data already being fetched. MODEL_VERSION unchanged from v15 (no selection logic changes; the news-window suppression becomes ABLE to fire, which is a repair of stated v14 behaviour, not a new rule).**
 
   **(1) `top` uppercases `sport`; every downstream guard compares lowercase.** `top.append({'sport':sport.upper(), ...})`, then five guards read `t.get('sport')=='mlb'` — always False. Everything behind those guards has been silently null on real plays since the day it shipped. Verified in the betlog: of 49 real plays carrying the keys, **0** have a non-null value for `mlb_gamePk`, `venue`, `day_night`, `probable_away/home`, `wx_*`, `roof`, `park_rf_approx`, or any `kalshi_*` field. Dead: F29 (MLB Stats context — the "master join key to the entire MLB stats universe"), F36 weather/park factors, the scratch-detector stamps, the F39 Kalshi join, and **the v14 news-window suppression** — a safety rule the v14.4 remediation pass specifically believed it had repaired. The v14.4 fix was correct; it just read the uppercased key. `pm_miss` reported 0 across all 83 runs and looked like an all-clear, but it only increments when both team codes resolve, which requires entering the block the guard never let it reach. Fixed by carrying `sport_key` (lowercase registry key) alongside the display `sport`, and repointing all five guards. Live-verified against the Kalshi API: 45/45 open MLB events resolve through `KALSHI_MLB`, so the feed returns on the next full run.

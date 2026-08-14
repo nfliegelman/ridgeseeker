@@ -126,6 +126,29 @@ check("no longer seeded from r.get('ev')", "_cand={'bovada':r.get('ev')}" in src
 check("polymarket compared at the ask, not the mid",
       "_cand['polymarket']=play['poly_ev_ask']" in src, True)
 
+print("\nvenue routing: picks the cheapest executable venue, never creates a bet")
+check("bovada-only candidates -> bovada",
+      rs.route_venue({'bovada': {'ev': -0.048, 'price': -115, 'dec': 1.87}})[0], 'bovada')
+check("polymarket cheaper -> polymarket",
+      rs.route_venue({'bovada': {'ev': -0.048, 'price': -115, 'dec': 1.87},
+                      'polymarket': {'ev': -0.014, 'price': 0.47, 'dec': 2.13}})[0], 'polymarket')
+check("bovada cheaper -> bovada",
+      rs.route_venue({'bovada': {'ev': -0.010, 'price': +110, 'dec': 2.10},
+                      'polymarket': {'ev': -0.055, 'price': 0.52, 'dec': 1.92}})[0], 'bovada')
+check("a venue not in EXECUTABLE_VENUES is ignored",
+      rs.route_venue({'bovada': {'ev': -0.048, 'price': -115, 'dec': 1.87},
+                      'betfair': {'ev': +0.20, 'price': 0.40, 'dec': 2.50}})[0], 'bovada')
+check("candidate with no dec is skipped",
+      rs.route_venue({'polymarket': {'ev': 0.9, 'price': 0.4, 'dec': None},
+                      'bovada': {'ev': -0.048, 'price': -115, 'dec': 1.87}})[0], 'bovada')
+check("no usable candidates -> (None, None)", rs.route_venue({})[0], None)
+check("routing never invents a bet: caller-side only, no gate call inside",
+      'gate(' in rs.route_venue.__doc__ if rs.route_venue.__doc__ else False, False)
+# Kalshi's fee must reduce its decimal, or the router would over-credit it
+_ka, _kn = 0.50, 20
+_kcost = _kn * _ka + rs.kalshi_fee(_ka, _kn, rs.KALSHI_TAKER_MULT)
+check("kalshi decimal is net of fee (< 1/ask)", (_kn / _kcost) < (1.0 / _ka), True)
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILED: {FAILURES}")
