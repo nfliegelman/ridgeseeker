@@ -104,6 +104,28 @@ if ml:
     check("shop_gain >= 0 (best cannot be worse than available)",
           p.get('shop_gain') is None or p['shop_gain'] >= -1e-9, True)
 
+print("\nsport_key: downstream guards must see the lowercase registry key")
+# The `top` rows uppercase 'sport' for display. Every MLB-only join downstream
+# (MLB Stats context, weather, park factors, scratch stamps, the news-window
+# suppression, and the Kalshi join) compares against the lowercase registry key.
+# When those guards read 'sport' they were always False, silently nulling every
+# one of those fields on real plays. Guard the invariant directly.
+import re
+src = open("ridgeseeker.py").read()
+check("no downstream guard compares t['sport'] to a lowercase key",
+      re.search(r"t\.get\('sport'\)\s*==\s*'[a-z]+'", src), None)
+check("top rows carry sport_key", "'sport_key':sport" in src, True)
+check("top rows forward an_ml", "'an_ml':c.get('an_ml')" in src, True)
+check("mlb context join uses sport_key",
+      "t.get('sport_key')=='mlb'" in src, True)
+
+print("\nexec_best_venue: Bovada must be a real candidate")
+check("bovada EV computed from fair x price, not the absent rec 'ev' key",
+      "_cand['bovada']=round(_fairp*am2dec(r['price'])-1,4)" in src, True)
+check("no longer seeded from r.get('ev')", "_cand={'bovada':r.get('ev')}" in src, False)
+check("polymarket compared at the ask, not the mid",
+      "_cand['polymarket']=play['poly_ev_ask']" in src, True)
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILED: {FAILURES}")

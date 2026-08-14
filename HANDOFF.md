@@ -162,6 +162,30 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.1 (2026-08-14), the sport-casing bug: one string case silently killed six shipped features, including a safety suppression. Plus a real execution edge found in data already being fetched. MODEL_VERSION unchanged from v15 (no selection logic changes; the news-window suppression becomes ABLE to fire, which is a repair of stated v14 behaviour, not a new rule).**
+
+  **(1) `top` uppercases `sport`; every downstream guard compares lowercase.** `top.append({'sport':sport.upper(), ...})`, then five guards read `t.get('sport')=='mlb'` — always False. Everything behind those guards has been silently null on real plays since the day it shipped. Verified in the betlog: of 49 real plays carrying the keys, **0** have a non-null value for `mlb_gamePk`, `venue`, `day_night`, `probable_away/home`, `wx_*`, `roof`, `park_rf_approx`, or any `kalshi_*` field. Dead: F29 (MLB Stats context — the "master join key to the entire MLB stats universe"), F36 weather/park factors, the scratch-detector stamps, the F39 Kalshi join, and **the v14 news-window suppression** — a safety rule the v14.4 remediation pass specifically believed it had repaired. The v14.4 fix was correct; it just read the uppercased key. `pm_miss` reported 0 across all 83 runs and looked like an all-clear, but it only increments when both team codes resolve, which requires entering the block the guard never let it reach. Fixed by carrying `sport_key` (lowercase registry key) alongside the display `sport`, and repointing all five guards. Live-verified against the Kalshi API: 45/45 open MLB events resolve through `KALSHI_MLB`, so the feed returns on the next full run.
+
+  **(2) `an_ml` never reached plays either — fourth instance of the same bug class.** `top` simply did not forward it. It is present on 255/255 snapshot rows and 0/49 plays. The HANDOFF has now logged this failure mode four times (F35, F45c, this, and #1 above): *a field verified at the fetch boundary but never across the attachment boundary.* Worth a standing check rather than another one-off fix — the cheap version is asserting non-null counts on a sample of logged plays, not just on the fetch.
+
+  **(3) `exec_best_venue` structurally excluded Bovada.** The candidate set seeded `{'bovada': r.get('ev')}`, but `build_recommendation` puts no `ev` key on either rec type, so it was None on every play and filtered one line later. All 48 logged plays named polymarket or betonline as "best venue" — guaranteed by construction, not observed. Bovada's EV is now computed from the same `fair x decimal-odds` identity used everywhere else, and Polymarket is compared at the **ask** rather than the mid, since a midpoint is not a fill.
+
+  **(4) The finding that matters: Polymarket is materially cheaper than Bovada for the same bet.** Recomputed honestly over the 48 plays carrying a quote:
+
+  | venue | mean EV | median EV |
+  |---|---|---|
+  | Bovada | -4.81% | -4.66% |
+  | BetOnline | -2.68% | -2.61% |
+  | Polymarket (mid) | -0.18% | -0.43% |
+  | **Polymarket (ask — taker)** | **-1.40%** | **-1.60%** |
+  | Polymarket (bid — maker) | +1.08% | +0.60% |
+
+  At the ask — paying the spread, the honest worst case — Polymarket beats Bovada by **+3.41 points** and wins on **38/48** plays. Quotes are tight: median bid-ask **1 cent**, max 3. **15/48 plays price at 0% EV or better at the ask, and 10/48 clear +3%** — the value threshold Bovada has never once cleared in 1,114 pregame legs. This needs no offshore sportsbook account. Logged as `poly_ev_ask`/`poly_ev_bid`/`poly_spread`/`venue_gain`, surfaced as a "Cheaper venue for the same bet" card. **Open question the data cannot answer: depth.** The quote proves the price existed, not that a $10-50 stake fits inside it; verify on live books before trusting it.
+
+  **(5) Explicit negative results, recorded so nobody re-mines them.** (a) *The devig math is fine.* Over 399 settled rows the Pinnacle-anchored fair predicted 199.0 wins against 194 actual — inside noise — and power vs multiplicative devig differ by a mean of 0.004 points (max 0.77). Tuning the devig is not where the money is. (b) *Further bet filtering is exhausted.* Every additional cut tried on the v15 bet set (num_bets, hours-to-game, price band, deeper contrarian, steam magnitude) moves a 23-row sample by amounts well inside noise, with no a-priori mechanism. The v15 split was justified by a large effect on n=32 plus a mechanical reason; these are not, and stacking them would be data-mining. **The remaining lever is execution price, not selection.** (c) `pin_age_min` is 0-2 min on 252/252 rows, so the stale-anchor suppression has never had occasion to fire.
+
+  Files: `ridgeseeker.py` (top dict, five sport guards, poly ask/bid EV, exec_best_venue, compute_stats venue card, Results tab, CSV columns), `test_tiers.py` (+7 assertions), FUTURE.md.
+
 - **v15 (2026-08-14), tier split + phantom-value fix + price-shopping measurement. MODEL_VERSION BUMPED to `2026-08-14.v15-tiersplit1`: the S/A definition changes, so play selection changes.** Triggered by the owner's read of the dashboard — "S tier is doing pretty darn good but my A tier is all over the place, and there's minimal stuff in the other tiers." All three observations were correct and each had a distinct cause.
 
   **(1) The A tier was three populations wearing one label.** The ladder read `elif (gap>=th['A'] and contrarian) or (gap>=th['S'])`. That trailing clause admitted any gap ≥25 to A with *no contrarian test*, and the demotion guard beneath it (`not contrarian and tickets>=55`) left the entire 36-54% ticket band ungraded by any public-side check. Decomposing every S/A row ever logged:

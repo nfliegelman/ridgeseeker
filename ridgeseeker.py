@@ -1244,6 +1244,8 @@ function renderResults(){
   if(evr&&evr.n){ h+=`<div class="rcard"><b>Expected vs realized:</b> stated EV summed to ${evr.exp>0?'+':''}${evr.exp}u across ${evr.n} settled bets; reality delivered ${evr.act>0?'+':''}${evr.act}u (gap ${evr.gap>0?'+':''}${evr.gap}u).<div class="rnote">A persistently large negative gap means stated edges are inflated. Meaningless before ~50 bets.</div></div>`; }
   const cr=S.clv_roll;
   if(cr&&cr.n>=10){ h+=`<div class="rcard"><b>Drift check:</b> EV-at-close rolling last ${cr.win}: ${pct(cr.roll)} vs cumulative ${pct(cr.cum)} (n=${cr.n}).<div class="rnote">Rolling far below cumulative suggests the edge is decaying or the market adapted (item 17).</div></div>`; }
+  const vn=S.venue;
+  if(vn&&vn.n){ h+=`<div class="rcard"><b>Cheaper venue for the same bet:</b> on ${vn.n} logged plays a non-Bovada venue priced the identical outcome better on ${vn.beat_pct}% of them, averaging <b>${vn.avg_pts>0?'+':''}${vn.avg_pts} points</b> of EV${vn.winners&&vn.winners.length?` (${vn.winners.map(w=>w[0]+' ×'+w[1]).join(', ')})`:''}.<div class="rnote">A prediction-market contract on the same game is the same bet at a different price, and needs no new sportsbook account. Priced at the ASK, i.e. what a taker actually pays, not the midpoint. Liquidity is the open question this number cannot answer: the quote says the price existed, not that your stake fits inside it. Check the depth on a few plays at your real stake before trusting it.</div></div>`; }
   const shp=S.shop;
   if(shp&&shp.n){ h+=`<div class="rcard"><b>Cost of one book:</b> across ${shp.n} logged plays the best price in the market averaged <b>${shp.avg_pts>0?'+':''}${shp.avg_pts} points</b> of EV above the best price you can actually reach (${shp.books.join(', ')}); a book you cannot bet held the better number on ${shp.beat_pct}% of them.<div class="rnote">This is not a model parameter and no threshold change recovers it. Measured over the backfilled history the median Bovada moneyline priced -4.4% against devigged Pinnacle while the best book priced -1.2%. Every signal this tool detects is worth at most ~1.5 points, so on a single book the vig is larger than the edge. Adding one more executable account is worth more than any tuning in this file. Set EXECUTABLE_BOOKS the day you open one.</div></div>`; }
   const cs=S.clv_seg;
@@ -1982,6 +1984,19 @@ def compute_stats(log_path, snap_path, unit_dollars):
            'avg_pts':round(100*sum(sg_all)/len(sg_all),2),
            'books':list(EXECUTABLE_BOOKS),
            'beat_pct':round(100*sum(1 for g in sg_all if g>0.0005)/len(sg_all))} if sg_all else None)
+    # Cross-venue gap (v15.1). Same idea as `shop`, but across venue TYPES rather than
+    # sportsbooks: a prediction-market contract on the same outcome is the same bet at
+    # a different price. This is reported separately because unlike an offshore book it
+    # needs no new sportsbook account, and on the logged history it is the single
+    # largest recoverable edge in the system.
+    vg=[p.get('venue_gain') for p in plays_real if p.get('venue_gain') is not None]
+    vwin={}
+    for p in plays_real:
+        if p.get('venue_gain') is not None and p['venue_gain']>0.0005 and p.get('exec_best_venue'):
+            vwin[p['exec_best_venue']]=vwin.get(p['exec_best_venue'],0)+1
+    venue=({'n':len(vg),'avg_pts':round(100*sum(vg)/len(vg),2),
+            'beat_pct':round(100*sum(1 for g in vg if g>0.0005)/len(vg)),
+            'winners':sorted(vwin.items(), key=lambda kv:-kv[1])[:4]} if vg else None)
     # Expected vs realized (item 13): the earliest read on whether stated edges are
     # inflated. Settled only; voided bets never had money at risk.
     evs=[p for p in settled if p.get('ev') is not None and p.get('units')]
@@ -2048,7 +2063,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
         shadow={'rows':rows,'pending':len([p for p in sh if p.get('result') is None])}
     return {'overall':overall,
             'shadow':shadow,
-            'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,'shop':shop,
+            'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,'shop':shop,'venue':venue,
             'by_ev':by(ev_bucket, order=['3-5%','5-8%','8%+','sharp only (no price edge)']),
             'by_grade':by(lambda r:r.get('grade'), order=['S','A','B','C','D']),
             'by_units':by(lambda r:f"{r.get('units')}u"),
@@ -2225,8 +2240,15 @@ def main():
             sg=c.get('sharp_grade'); rec=c.get('rec')
             if (sg and sg['grade'] in ('S','A')) or (rec and rec.get('double')):
                 vp=c.get('value_play') or {}
-                top.append({'sport':sport.upper(),'away':c['away'],'home':c['home'],'time':c['time'],
-                            'event_id':c.get('event_id'),
+                # 'sport' is UPPERCASED for display. Every downstream guard compares
+                # against the lowercase registry key ('mlb'), so carry that separately
+                # as sport_key — see the v15.1 note below. 'an_ml' must be carried too:
+                # it exists on the card but `top` never forwarded it, so the F45c fix
+                # that was supposed to make an_ml reach plays has been dead since it
+                # shipped (255/255 snapshots have it, 0/49 plays do).
+                top.append({'sport':sport.upper(),'sport_key':sport,
+                            'away':c['away'],'home':c['home'],'time':c['time'],
+                            'event_id':c.get('event_id'),'an_ml':c.get('an_ml'),
                             'grade':sg['grade'] if sg else None,'rec':rec,'sg':sg,'has_value':c.get('has_value'),
                             'status':c.get('status'),'units':c.get('units'),'units_reason':c.get('units_reason'),
                             'ev':vp.get('ev'),'fair':vp.get('fair'),'fair_mult':vp.get('fair_mult'),'anchor':vp.get('anchor'),
@@ -2315,7 +2337,7 @@ def main():
             # str(gamePk). The rec's market-type key is 'type', not 'rec_type' (that key
             # only exists on `play`), and pin_age_min is now threaded onto `t` above, so
             # both suppressions can finally fire as the v14 comment intended.
-            _gp=(mlb_ctx.get((t['away'],t['home'])) or {}).get('mlb_gamePk') if t.get('sport')=='mlb' else None
+            _gp=(mlb_ctx.get((t['away'],t['home'])) or {}).get('mlb_gamePk') if t.get('sport_key')=='mlb' else None
             if scratches and _gp is not None and str(_gp) in scratches:
                 _skip='news'
             elif r.get('type')=='value' and r.get('anchor')=='pinnacle' and (t.get('pin_age_min') or 0)>PIN_STALE_MIN:
@@ -2330,10 +2352,12 @@ def main():
             # devigged Pinnacle-anchored prob already on the rec.
             play['kalshi_ticker']=play['kalshi_bid']=play['kalshi_ask']=play['kalshi_ev_taker']=play['kalshi_ev_maker']=None
             play['poly_mid']=play['poly_bid']=play['poly_ask']=play['poly_ev_mid']=None
+            play['poly_ev_ask']=play['poly_ev_bid']=play['poly_spread']=None
+            play['venue_gain']=None
             _fairp=r.get('fair')
             if r.get('market')=='Moneyline':
                 _side=str(r.get('side'))
-                if t.get('sport')=='mlb':
+                if t.get('sport_key')=='mlb':
                     _ca,_cb=KALSHI_MLB.get(t['away']),KALSHI_MLB.get(t['home'])
                     _my=KALSHI_MLB.get(_side)
                     _evs=pm_kal.get(frozenset({_ca,_cb})) if (_ca and _cb) else None
@@ -2355,18 +2379,49 @@ def main():
                 if _pq and _pq.get(_side):
                     _p=_pq[_side]
                     play['poly_mid']=_p.get('mid'); play['poly_bid']=_p.get('bid'); play['poly_ask']=_p.get('ask')
-                    if _fairp and _p.get('mid'):
-                        _pm=POLY_TAKER_MULT.get(t.get('sport'),0.0)
-                        _pcost=_p['mid']+(_pm*_p['mid']*(1-_p['mid']) if _pm else 0.0)
-                        play['poly_ev_mid']=round(_fairp/_pcost-1,4)
-            # best executable venue by fee-adjusted EV (LOG-ONLY, decisions unchanged)
-            _cand={'bovada':r.get('ev')}
+                    _pm=POLY_TAKER_MULT.get(t.get('sport_key'),0.0)
+                    def _pev(px):
+                        """EV of buying a $1-settling contract at px, fee-adjusted."""
+                        if not (_fairp and px): return None
+                        cost=px+(_pm*px*(1-px) if _pm else 0.0)
+                        return round(_fairp/cost-1,4) if cost>0 else None
+                    # mid = the signal, ask = what a taker actually pays, bid = what a
+                    # resting maker gets filled at (upper bound: resting orders fill
+                    # disproportionately when the market moves against you, the same
+                    # adverse-selection caveat already noted for Kalshi makers).
+                    play['poly_ev_mid']=_pev(_p.get('mid'))
+                    play['poly_ev_ask']=_pev(_p.get('ask'))
+                    play['poly_ev_bid']=_pev(_p.get('bid'))
+                    play['poly_spread']=(round(_p['ask']-_p['bid'],4)
+                                         if (_p.get('ask') is not None and _p.get('bid') is not None) else None)
+            # Best executable venue by fee-adjusted EV (LOG-ONLY, decisions unchanged).
+            #
+            # v15.1: Bovada was never actually IN this comparison. The candidate read
+            # `r.get('ev')`, but build_recommendation puts no 'ev' key on either rec
+            # type, so the Bovada entry was None on every play and got filtered out one
+            # line later. The field has therefore been reporting "best venue" out of a
+            # set that structurally excluded the venue we actually bet — 48/48 logged
+            # plays named polymarket or betonline, which was guaranteed by construction
+            # rather than observed. Bovada's EV is computed here from the same
+            # fair x decimal-odds identity used everywhere else.
+            #
+            # Polymarket is also now priced at the ASK (what a taker actually pays)
+            # rather than only the mid, because the mid is not a fill. On the 48 plays
+            # that carry a quote the honest taker number still beats Bovada by +3.41
+            # points on average and wins 38/48; at the mid it looks like +4.63, which
+            # flatters it. Both are logged so the spread cost stays visible.
+            _cand={}
+            if _fairp and r.get('price') is not None:
+                _cand['bovada']=round(_fairp*am2dec(r['price'])-1,4)
             if r.get('bo_price') is not None and _fairp: _cand['betonline']=round(_fairp*am2dec(r['bo_price'])-1,4)
             if play.get('kalshi_ev_taker') is not None: _cand['kalshi']=play['kalshi_ev_taker']
-            if play.get('poly_ev_mid') is not None: _cand['polymarket']=play['poly_ev_mid']
+            if play.get('poly_ev_ask') is not None: _cand['polymarket']=play['poly_ev_ask']
             _cand={k:v for k,v in _cand.items() if v is not None}
             play['exec_best_venue']=max(_cand,key=_cand.get) if _cand else None
             play['exec_best_ev']=round(_cand[play['exec_best_venue']],4) if _cand else None
+            # What switching venue is worth on THIS play, vs the book we actually bet.
+            play['venue_gain']=(round(play['exec_best_ev']-_cand['bovada'],4)
+                                if (_cand.get('bovada') is not None and play.get('exec_best_ev') is not None) else None)
             # our-side AN per-book ML prices (source sweep, log-only)
             _anm=t.get('an_ml') or None
             if _anm and r.get('market')=='Moneyline':
@@ -2374,8 +2429,8 @@ def main():
                 play['an_ml']={b:v.get(_sk) for b,v in _anm.items() if v.get(_sk)} if _sk else None
             else:
                 play['an_ml']=None
-            ctx=mlb_ctx.get((t['away'],t['home'])) if t.get('sport')=='mlb' else None
-            if ctx is None and mlb_ctx and t.get('sport')=='mlb': ctx_misses+=1
+            ctx=mlb_ctx.get((t['away'],t['home'])) if t.get('sport_key')=='mlb' else None
+            if ctx is None and mlb_ctx and t.get('sport_key')=='mlb': ctx_misses+=1
             for k in ('mlb_gamePk','venue','day_night','double_header','probable_away','probable_away_id',
                       'probable_home','probable_home_id','wx_condition','wx_temp_f','wx_wind'):
                 play[k]=(ctx or {}).get(k)
@@ -2453,7 +2508,8 @@ def main():
                'bo_price','best_price','best_book','best_ev','avail_price','avail_book','avail_ev','shop_gain',
                'an_ml','probable_changed','probable_changed_post_log',
                'kalshi_ticker','kalshi_bid','kalshi_ask','kalshi_n','kalshi_ev_taker','kalshi_ev_maker',
-               'poly_mid','poly_bid','poly_ask','poly_ev_mid','exec_best_venue','exec_best_ev',
+               'poly_mid','poly_bid','poly_ask','poly_spread','poly_ev_mid','poly_ev_ask','poly_ev_bid',
+               'exec_best_venue','exec_best_ev','venue_gain',
                'close_price','close_fair','close_fair_mult','close_anchor','close_point','close_ts','close_obs',
                'close_line_moved','clv','clv_fair','clv_fair_mult','clv_measured',
                'shadow','shadow_kind',
