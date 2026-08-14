@@ -4,9 +4,12 @@ Finds real sports betting edges (MLB now; more sports in season) and tracks whet
 
 ## How it decides
 - **Fair value:** Pinnacle (the sharpest book in the world) with the vig stripped out. When Pinnacle skips a market, the no-vig median of ~25 books fills in.
-- **Value bet:** Bovada's price beats fair value by 3%+ after sanity gates (longshot cap, plausibility ceiling, minimum book count).
-- **Sharp money:** ticket% vs money% gaps from Action Network, graded S/A/B/C/D. Treated as a secondary signal until the tracker proves it earns its keep.
+- **Sharp money:** ticket% vs money% gaps from Action Network, graded S/A/B/C/D. This is what the tool actually bets. S and A require *contrarian* confirmation — a big money-vs-ticket gap only counts as sharp when the ticket count is low, because few bets carrying much money is a syndicate while the same gap inside a crowd is just a whale on a popular side.
+- **Value bet:** Bovada's price beats fair value by 3%+ after sanity gates. **Honest status: this has never fired on a pregame game.** Across 1,114 pregame moneyline legs the best edge Bovada ever offered was +0.91%, median -4.39%. On one book the threshold is unreachable, so today the tool is a sharp-money follower and the value gate is dormant. It reopens when you add a second book.
 - **Unit sizing:** 1u / 1.5u / 2u with a hard +250 longshot cap.
+
+## The thing that decides whether this makes money
+Not the model — the **number of books you can bet at**. Measured over the same 1,114 legs: the median Bovada price is worth -4.39% EV, the median best-price-in-market is -1.17%, and Bovada holds the best number 2.2% of the time. Every signal in here is worth at most ~1.5 points of edge. One book means the vig is bigger than the edge, and no amount of threshold tuning changes that. Opening one more account is worth more than every model change in this repo combined. Set `EXECUTABLE_BOOKS` in `ridgeseeker.py` when you do; the Results tab reports the running cost until then.
 
 ## How it grades itself
 - Every recommended play is logged and graded automatically off final scores.
@@ -19,6 +22,8 @@ Covers MLB now, with NFL, NBA, NHL, college football, and college basketball lig
 
 ## Honest use
 Paper trade until CLV is positive over 100+ bets. Level-up gates ($10 to $20 to $50 units) are built in and deliberately strict.
+
+Where it stands after ~6 weeks (v15): 55 real bets, 21-31, -10.6% ROI, EV-at-close -3.84%. The v15 tier split is a response to that — the old A tier merged three different populations, and the worst of them (large gap, but the public on the same side) closed at -8.27% CLV while supplying a third of every bet placed. Re-graded on the same history the surviving bet set closes at +0.08% instead of -3.84%. Two caveats worth keeping in front of you: that is an in-sample backtest on the data that motivated the change, and 22 bets is far too few to call an edge either way. Judge it forward, on CLV, not on the record.
 
 ## Your data is safe when the code changes
 History lives in `ridgeseeker_betlog.json` and `ridgeseeker_snapshots.json`, separate from the code, committed back after every run. Zips from your AI assistant never include them.

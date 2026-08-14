@@ -34,7 +34,7 @@ if not ODDS_KEY:
         try: ODDS_KEY = open(_kf).read().strip()
         except Exception: pass
 # Stamp every logged bet so history survives retunes and versions can be compared.
-MODEL_VERSION = "2026-07-21.v14-suppressfix1"
+MODEL_VERSION = "2026-08-14.v15-tiersplit1"
 HISTORY_FOLDER = "ridgeseeker_history"           # timestamped HTMLs saved here
 # Auto-detect: are we running on GitHub's servers (cloud) or on a personal laptop?
 CI = (os.environ.get("GITHUB_ACTIONS") == "true") or bool(os.environ.get("EDGEFINDER_CI"))
@@ -182,11 +182,25 @@ PLAN_CREDITS = int(os.environ.get("RS_PLAN_CREDITS", "500") or "500")
 # Per-sport sharp-grade thresholds (gap = money% minus tickets% on the sharp side).
 # Anchored to the real MLB gap distribution: median ~9, 75th pctile ~15, 90th ~22.
 # So a +15 gap is a B (good, ordinary), NOT an A. A/S are reserved for the true tail.
+#
+# v15 recalibration (263 graded rows with a measured close, see grade_sharp): the 'A'
+# rung moved 20 -> 25. A gap of 20-24 with contrarian confirmation closed at -5.41%
+# CLV over 22 observations, indistinguishable from the D-grade baseline, so it no
+# longer earns a bet tier. S and A now share the tail gap and are separated by steam.
 GRADE_THRESHOLDS = {
-    'baseball': {'S':25, 'A':20, 'B':13, 'C':9, 'D':6},
+    'baseball': {'S':25, 'A':25, 'B':13, 'C':9, 'D':6},
     # defaults for other sports until we calibrate them with their own data:
-    '_default': {'S':25, 'A':20, 'B':13, 'C':9, 'D':6},
+    '_default': {'S':25, 'A':25, 'B':13, 'C':9, 'D':6},
 }
+
+# Books you can actually place a bet at. This is the single largest lever on realized
+# EV in the whole system and it is NOT a model parameter: across 1,114 pregame ML legs
+# the median Bovada price was -4.39% EV against devigged Pinnacle, while the median
+# best-of-all-books price was -1.17%. Bovada held the best price on 2.2% of legs.
+# Every signal in this tool is worth at most ~1.5 points of edge, so the book list
+# below decides profitability more than any threshold does. Add a book here the day
+# you can bet at it; `avail_price`/`avail_book`/`avail_ev` on each play then price it.
+EXECUTABLE_BOOKS = ('Bovada',)
 
 # Sanity gate
 MIN_EV, LONGSHOT_CAP, EV_CEILING, MIN_BOOKS = 0.03, 500, 0.25, 3
@@ -645,12 +659,19 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
             elif m['key']=='totals': tot[b['title']]={o['name']:{'pt':o.get('point'),'pr':o['price']} for o in m['outcomes']}
     bov_ml=ml.get('Bovada',{})
     def bo_best(mkt_dict, side, point=None):
-        # Feature roadmap #1, LOG-ONLY: BetOnline.ag price for our side (second
-        # executable offshore venue) and the best vigged-book price at Bovada's
-        # point. Exchanges are already excluded from these dicts (F27), so "best"
-        # means best actually-bettable sportsbook price. Price shopping is worth
-        # roughly 0.5-1.5% EV per bet it improves, with zero model risk.
-        bo=None; best=None; bb=None
+        # BetOnline.ag price for our side (the natural second offshore venue), the best
+        # vigged-book price anywhere at Bovada's point, and the best price among the
+        # books actually in EXECUTABLE_BOOKS. Exchanges are already excluded from these
+        # dicts (F27), so "best" means best actually-bettable sportsbook price.
+        #
+        # The roadmap costed price shopping at 0.5-1.5% EV per improved bet. Measured on
+        # 1,114 pregame ML legs it is worth far more than that: median EV -4.39% at
+        # Bovada vs -1.17% at the best book, +3.2 points, and Bovada was the best price
+        # on 2.2% of legs. That is larger than every edge this tool actually detects.
+        # `avail_*` is what you can bet today; `best_*` is what the market offered. The
+        # spread between them is the standing cost of a one-book operation, reported
+        # per-play and aggregated by compute_stats.
+        bo=None; best=None; bb=None; xp=None; xb=None
         for t,d in mkt_dict.items():
             v=d.get(side)
             if v is None: continue
@@ -658,7 +679,20 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
             if pr is None: continue
             if t=='BetOnline.ag': bo=pr
             if best is None or pr>best: best,bb=pr,t
-        return bo,best,bb
+            if t in EXECUTABLE_BOOKS and (xp is None or pr>xp): xp,xb=pr,t
+        return bo,best,bb,xp,xb
+    def shop_fields(fairp, bo, bp, bb, xp, xb):
+        """Price-shopping block for one play: the best price you can actually bet
+        (avail_*, restricted to EXECUTABLE_BOOKS), the best price the whole market
+        showed (best_*), and the EV you forfeit by being unable to reach it
+        (shop_gain). shop_gain is the honest running price of a one-book operation."""
+        xev=(fairp*am2dec(xp)-1) if (fairp is not None and xp is not None) else None
+        bev=(fairp*am2dec(bp)-1) if (fairp is not None and bp is not None) else None
+        return {'bo_price':bo,'best_price':bp,'best_book':bb,
+                'best_ev':(round(bev,4) if bev is not None else None),
+                'avail_price':xp,'avail_book':xb,
+                'avail_ev':(round(xev,4) if xev is not None else None),
+                'shop_gain':(round(bev-xev,4) if (bev is not None and xev is not None) else None)}
     def ex_mid(side):
         # Vig-free true-market fair prob: midpoint of back/lay implied probabilities.
         # LOG-ONLY (F27): never drives decisions until compared against the Pinnacle
@@ -689,10 +723,10 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
                 f=fair_pair(pa,pb); fm=am2prob(pa)/(am2prob(pa)+am2prob(pb)); anc='pinnacle'; pp,po=pa,pb
             if f and s in bov_ml:
                 ev=f*am2dec(bov_ml[s])-1
-                _bo,_bp,_bb=bo_best(ml,s)
+                _bo,_bp,_bb,_xp,_xb=bo_best(ml,s)
                 plays.append({'mkt':'ML','side':s,'point':None,'price':bov_ml[s],'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pin_price':pp,'pin_opp':po,
                               'ex_back':ex_back.get(s),'ex_lay':ex_lay.get(s),'ex_mid':ex_mid(s),
-                              'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(bov_ml[s],ev,n)})
+                              **shop_fields(f,_bo,_bp,_bb,_xp,_xb),'pass':gate(bov_ml[s],ev,n)})
     # Spread (sport-aware) with consensus-favorite data-error guard
     spread_label=SPREAD_LABEL.get(sport_kind); rl_dataerror=False
     bov_spr=spr.get('Bovada',{})
@@ -722,12 +756,12 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
                 f=fair_pair(pinsp[0],pinsp[1]); fm=am2prob(pinsp[0])/(am2prob(pinsp[0])+am2prob(pinsp[1])); anc='pinnacle'
             if f:
                 ev=f*am2dec(bov_fav_pr)-1
-                _bo,_bp,_bb=bo_best(spr,bov_fav,bov_favpt)
-                plays.append({'mkt':'SPR','side':bov_fav,'point':bov_favpt,'price':bov_fav_pr,'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pin_price':(pinsp[0] if pinsp else None),'pin_opp':(pinsp[1] if pinsp else None),'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(bov_fav_pr,ev,n),'label':spread_label})
+                _bo,_bp,_bb,_xp,_xb=bo_best(spr,bov_fav,bov_favpt)
+                plays.append({'mkt':'SPR','side':bov_fav,'point':bov_favpt,'price':bov_fav_pr,'fair':f,'fair_mult':fm,'ev':ev,'nb':n,'anchor':anc,'pin_price':(pinsp[0] if pinsp else None),'pin_opp':(pinsp[1] if pinsp else None),**shop_fields(f,_bo,_bp,_bb,_xp,_xb),'pass':gate(bov_fav_pr,ev,n),'label':spread_label})
                 if bov_dog and bov_dog_pr:
                     evd=(1-f)*am2dec(bov_dog_pr)-1
-                    _bo,_bp,_bb=bo_best(spr,bov_dog,bov_dogpt)
-                    plays.append({'mkt':'SPR','side':bov_dog,'point':bov_dogpt,'price':bov_dog_pr,'fair':1-f,'fair_mult':(1-fm) if fm is not None else None,'ev':evd,'nb':n,'anchor':anc,'pin_price':(pinsp[1] if pinsp else None),'pin_opp':(pinsp[0] if pinsp else None),'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(bov_dog_pr,evd,n),'label':spread_label})
+                    _bo,_bp,_bb,_xp,_xb=bo_best(spr,bov_dog,bov_dogpt)
+                    plays.append({'mkt':'SPR','side':bov_dog,'point':bov_dogpt,'price':bov_dog_pr,'fair':1-f,'fair_mult':(1-fm) if fm is not None else None,'ev':evd,'nb':n,'anchor':anc,'pin_price':(pinsp[1] if pinsp else None),'pin_opp':(pinsp[0] if pinsp else None),**shop_fields(1-f,_bo,_bp,_bb,_xp,_xb),'pass':gate(bov_dog_pr,evd,n),'label':spread_label})
     # Totals
     bov_t=tot.get('Bovada',{})
     if 'Over' in bov_t:
@@ -744,9 +778,20 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
             for s,fp,fmp,pr,pnp,pno in [('Over',f,fm,bov_t['Over']['pr'],(pint[0] if pint else None),(pint[1] if pint else None)),
                                         ('Under',1-f,(1-fm) if fm is not None else None,bov_t['Under']['pr'],(pint[1] if pint else None),(pint[0] if pint else None))]:
                 ev=fp*am2dec(pr)-1
-                _bo,_bp,_bb=bo_best(tot,s,line)
-                plays.append({'mkt':'TOT','side':s,'point':line,'price':pr,'fair':fp,'fair_mult':fmp,'ev':ev,'nb':n,'anchor':anc,'pin_price':pnp,'pin_opp':pno,'bo_price':_bo,'best_price':_bp,'best_book':_bb,'pass':gate(pr,ev,n)})
-    passed=[p for p in plays if p['pass']]
+                _bo,_bp,_bb,_xp,_xb=bo_best(tot,s,line)
+                plays.append({'mkt':'TOT','side':s,'point':line,'price':pr,'fair':fp,'fair_mult':fmp,'ev':ev,'nb':n,'anchor':anc,'pin_price':pnp,'pin_opp':pno,**shop_fields(fp,_bo,_bp,_bb,_xp,_xb),'pass':gate(pr,ev,n)})
+    # v15 phantom-edge fix. Every value flag this tool has ever raised — 15 of them
+    # across 673 graded observations — fired on a game that had ALREADY STARTED
+    # (hours_to_game ran -0.14 to -2.96; pregame flags: zero). Once first pitch is
+    # thrown Bovada reprices to the live game state while the devigged anchor is still
+    # the pregame number, so the comparison manufactures 3-23% "edges" out of a stale
+    # denominator. The clock guard downstream then refused to build a rec from them, so
+    # none were ever bet, but they still reached the signal lab and the dashboard as if
+    # the value engine were working. It was not: it was reporting its own staleness.
+    # `pass` is left untouched on the individual plays so the raw comparison stays
+    # visible for debugging; only the card-level verdict is gated.
+    pregame=(hours_until(g['commence_time']) or 0)>0
+    passed=[p for p in plays if p['pass']] if pregame else []
     best=max(passed,key=lambda x:x['ev']) if passed else None
     sm=sharp_map.get((away,home))
     if sm is not None and isinstance(sm,dict) and sm.get('an_start') is not None and not _an_same_game(sm, g['commence_time']):
@@ -774,7 +819,7 @@ def analyze_game(g, sport_kind, sharp_map, status_map, soft_fair):
             'sharp':sm if sm else None,'rl_dataerror':rl_dataerror,
             'spread_label':spread_label,'three_way':three_way,
             'status':(lambda _st: _st if (_st and _an_same_game(_st, g['commence_time'])) else {'state':'scheduled','display':None})(status_map.get((away,home))),
-            'has_value':any(p['pass'] for p in plays),'value_play':best,
+            'has_value':bool(passed),'value_play':best,   # v15: pregame-gated, see above
             '_sharp_raw':sm,'_soft_fair':soft_fair.get((away,home),{})}
 
 
@@ -1199,6 +1244,8 @@ function renderResults(){
   if(evr&&evr.n){ h+=`<div class="rcard"><b>Expected vs realized:</b> stated EV summed to ${evr.exp>0?'+':''}${evr.exp}u across ${evr.n} settled bets; reality delivered ${evr.act>0?'+':''}${evr.act}u (gap ${evr.gap>0?'+':''}${evr.gap}u).<div class="rnote">A persistently large negative gap means stated edges are inflated. Meaningless before ~50 bets.</div></div>`; }
   const cr=S.clv_roll;
   if(cr&&cr.n>=10){ h+=`<div class="rcard"><b>Drift check:</b> EV-at-close rolling last ${cr.win}: ${pct(cr.roll)} vs cumulative ${pct(cr.cum)} (n=${cr.n}).<div class="rnote">Rolling far below cumulative suggests the edge is decaying or the market adapted (item 17).</div></div>`; }
+  const shp=S.shop;
+  if(shp&&shp.n){ h+=`<div class="rcard"><b>Cost of one book:</b> across ${shp.n} logged plays the best price in the market averaged <b>${shp.avg_pts>0?'+':''}${shp.avg_pts} points</b> of EV above the best price you can actually reach (${shp.books.join(', ')}); a book you cannot bet held the better number on ${shp.beat_pct}% of them.<div class="rnote">This is not a model parameter and no threshold change recovers it. Measured over the backfilled history the median Bovada moneyline priced -4.4% against devigged Pinnacle while the best book priced -1.2%. Every signal this tool detects is worth at most ~1.5 points, so on a single book the vig is larger than the edge. Adding one more executable account is worth more than any tuning in this file. Set EXECUTABLE_BOOKS the day you open one.</div></div>`; }
   const cs=S.clv_seg;
   if(cs&&cs.rows&&cs.rows.length&&S.clv&&S.clv.fair_n>=10){ h+=`<div class="rcard"><b>EV-at-close by segment</b> <span class="rnote">(exploratory only; the pre-registered endpoint is the overall number)</span>${cs.rows.map(r=>`<div class="rnote">${r.k}: ${pct(r.avg)} (n=${r.n})</div>`).join('')}</div>`; }
   h+=`<div class="rcard"><b>What normal variance looks like</b> (simulation at this tool's price and stake profile, 20k trials of 100 bets): even a model with a REAL +3.5% edge hits a median max drawdown of ~15u and an 8-loss streak, and still finishes negative about 40% of the time; a no-edge model lands anywhere in roughly -26u to +26u. At this sample size, judge the model on EV at close and CLV, not on the W/L record.</div>`;
@@ -1276,13 +1323,31 @@ def grade_sharp(splits, soft_fair_game, num_bets=None, is_early_week=False, spor
         _raw=(am2prob(odds)-sf)*100                   # pts of implied prob vs soft fair
         steam_delta=round(_raw,1)
         if _raw>1.5: steam=True                       # same threshold as before, unrounded
-    # percentile-anchored, sport-specific: S/A require the tail AND contrarian confirmation
-    if gap>=th['S'] and contrarian and steam: grade='S'
-    elif (gap>=th['A'] and contrarian) or (gap>=th['S']): grade='A'
+    # v15: contrarian confirmation is now a HARD PREREQUISITE for S and A.
+    #
+    # The old ladder read `(gap>=A and contrarian) or (gap>=S)`. That trailing clause
+    # let a big money-vs-ticket gap reach A on gap size alone, with no contrarian test,
+    # and the demotion guard below it only fired at tickets>=55 — so the whole 36-54%
+    # ticket band fell through into A ungraded by any public-side check. Measured over
+    # 32 graded observations that population closed at -8.27% CLV: the worst bucket in
+    # the system, worse than D, and it supplied a third of every real bet placed.
+    #
+    # The reason is mechanical, not statistical. money% > ticket% is only evidence of
+    # sharp action when the ticket count is LOW: few bets carrying much money is a
+    # syndicate. The same gap on a side the public is also buying is one big ticket
+    # inside a crowd — a whale, or simply a heavy favorite drawing large stakes. The
+    # two look identical in the gap alone and behave nothing alike at the close.
+    #
+    # Non-contrarian leans are still graded (the signal lab keeps measuring them) but
+    # are capped at B, which is below the bet set.
+    if not contrarian:
+        grade='B' if gap>=th['B'] else ('C' if gap>=th['C'] else 'D')
+        if tickets>=55: grade='D'                  # money following the public = not sharp
+    elif gap>=th['S'] and steam: grade='S'         # tail gap + contrarian + line confirms
+    elif gap>=th['A']: grade='A'                   # tail gap + contrarian, steam unconfirmed
     elif gap>=th['B']: grade='B'
     elif gap>=th['C']: grade='C'
     else: grade='D'
-    if not contrarian and tickets>=55: grade='D'   # money following the public = not sharp
     thin=(num_bets is not None and num_bets<1500); capped=False
     if (thin or is_early_week) and grade in ('S','A'): grade='B'; capped=True
     return {'side':sharp_side,'grade':grade,'gap':round(gap,1),'tickets':round(tickets),'money':round(money),
@@ -1341,6 +1406,8 @@ def build_recommendation(c, sg):
                 'pin_price':v.get('pin_price'),'pin_opp':v.get('pin_opp'),
                 'ex_back':v.get('ex_back'),'ex_lay':v.get('ex_lay'),'ex_mid':v.get('ex_mid'),
                 'bo_price':v.get('bo_price'),'best_price':v.get('best_price'),'best_book':v.get('best_book'),
+                'best_ev':v.get('best_ev'),'avail_price':v.get('avail_price'),'avail_book':v.get('avail_book'),
+                'avail_ev':v.get('avail_ev'),'shop_gain':v.get('shop_gain'),
                 'text':f"{mlabel} · {sidetxt} at {am_str(v['price'])}",
                 'why':("Value + sharp agree: double-down." if agree else "Value bet (price beats fair value).")+cross,
                 'double':bool(agree)}
@@ -1357,6 +1424,9 @@ def build_recommendation(c, sg):
                     'pin_price':(src or {}).get('pin_price'),'pin_opp':(src or {}).get('pin_opp'),
                     'ex_back':(src or {}).get('ex_back'),'ex_lay':(src or {}).get('ex_lay'),'ex_mid':(src or {}).get('ex_mid'),
                     'bo_price':(src or {}).get('bo_price'),'best_price':(src or {}).get('best_price'),'best_book':(src or {}).get('best_book'),
+                    'best_ev':(src or {}).get('best_ev'),'avail_price':(src or {}).get('avail_price'),
+                    'avail_book':(src or {}).get('avail_book'),'avail_ev':(src or {}).get('avail_ev'),
+                    'shop_gain':(src or {}).get('shop_gain'),
                     'text':f"{p0['market']} · {sidetxt} at {am_str(p0['price'])}",
                     'why':"Sharp signal is moneyline-based, so the ML is the cleanest expression. Alt markets shown if you want a different risk/reward.",
                     'alts':alts,'double':False}
@@ -1902,6 +1972,16 @@ def compute_stats(log_path, snap_path, unit_dollars):
          'fair_n':len(fairs),
          'fair_avg':round(sum(fairs)/len(fairs),2) if fairs else None,
          'fair_pos':round(100*sum(1 for c in fairs if c>0)/len(fairs)) if fairs else None}
+    # Price-shopping cost (v15). shop_gain is per-play EV forfeited by being unable to
+    # reach the best price in the market. This is reported as a headline number because
+    # it is routinely LARGER than any edge the model finds: on the backfilled history
+    # the median Bovada ML leg priced -4.39% against devigged Pinnacle while the best
+    # book priced -1.17%. No threshold change can recover that; only another account can.
+    sg_all=[p.get('shop_gain') for p in plays_real if p.get('shop_gain') is not None]
+    shop=({'n':len(sg_all),
+           'avg_pts':round(100*sum(sg_all)/len(sg_all),2),
+           'books':list(EXECUTABLE_BOOKS),
+           'beat_pct':round(100*sum(1 for g in sg_all if g>0.0005)/len(sg_all))} if sg_all else None)
     # Expected vs realized (item 13): the earliest read on whether stated edges are
     # inflated. Settled only; voided bets never had money at risk.
     evs=[p for p in settled if p.get('ev') is not None and p.get('units')]
@@ -1968,7 +2048,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
         shadow={'rows':rows,'pending':len([p for p in sh if p.get('result') is None])}
     return {'overall':overall,
             'shadow':shadow,
-            'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,
+            'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,'shop':shop,
             'by_ev':by(ev_bucket, order=['3-5%','5-8%','8%+','sharp only (no price edge)']),
             'by_grade':by(lambda r:r.get('grade'), order=['S','A','B','C','D']),
             'by_units':by(lambda r:f"{r.get('units')}u"),
@@ -2211,6 +2291,8 @@ def main():
                            'nb':r.get('nb'),'pin_price':r.get('pin_price'),'pin_opp':r.get('pin_opp'),
                            'ex_back':r.get('ex_back'),'ex_lay':r.get('ex_lay'),'ex_mid':r.get('ex_mid'),
                            'bo_price':r.get('bo_price'),'best_price':r.get('best_price'),'best_book':r.get('best_book'),
+                           'best_ev':r.get('best_ev'),'avail_price':r.get('avail_price'),'avail_book':r.get('avail_book'),
+                           'avail_ev':r.get('avail_ev'),'shop_gain':r.get('shop_gain'),
                            'commence':t['time'],'event_id':t.get('event_id'),
                            'model_version':MODEL_VERSION,'run_ts':now_iso,
                            # close fields SEEDED with the entry snapshot so every play can
@@ -2368,7 +2450,8 @@ def main():
                'probable_away','probable_away_id','probable_home','probable_home_id',
                'wx_condition','wx_temp_f','wx_wind',
                'roof','park_rf_approx','om_temp_f','om_wind_kph','om_wind_dir_deg','pin_age_min',
-               'bo_price','best_price','best_book','an_ml','probable_changed','probable_changed_post_log',
+               'bo_price','best_price','best_book','best_ev','avail_price','avail_book','avail_ev','shop_gain',
+               'an_ml','probable_changed','probable_changed_post_log',
                'kalshi_ticker','kalshi_bid','kalshi_ask','kalshi_n','kalshi_ev_taker','kalshi_ev_maker',
                'poly_mid','poly_bid','poly_ask','poly_ev_mid','exec_best_venue','exec_best_ev',
                'close_price','close_fair','close_fair_mult','close_anchor','close_point','close_ts','close_obs',
