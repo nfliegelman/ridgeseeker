@@ -23584,8 +23584,8 @@
       "close_point": null,
       "close_ts": "2026-08-16T15:27:14.285862+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -6.03,
       "hours_to_game": 4.71,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -23615,8 +23615,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-08-16",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.52,
+      "clv_fair_mult": -5.07,
+      "clv_measured": false
     },
     {
       "away": "Arizona Diamondbacks",
@@ -23860,11 +23862,13 @@
       "close_point": null,
       "close_ts": "2026-08-16T15:27:14.285862+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.39,
       "date": "2026-08-16",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -5.45,
+      "clv_measured": false
     },
     {
       "away": "Washington Nationals",
@@ -24108,11 +24112,13 @@
       "close_point": null,
       "close_ts": "2026-08-16T15:27:14.285862+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -6.03,
       "date": "2026-08-16",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -5.07,
+      "clv_measured": false
     },
     {
       "away": "Seattle Mariners",
@@ -24156,11 +24162,13 @@
       "close_point": null,
       "close_ts": "2026-08-16T22:57:15.250374+00:00",
       "close_obs": 2,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -0.48,
+      "clv_fair": -3.95,
       "date": "2026-08-16",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -3.74,
+      "clv_measured": true
     },
     {
       "away": "Central Michigan Chippewas",
