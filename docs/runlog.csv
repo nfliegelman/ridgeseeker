@@ -196,3 +196,4 @@ ts,mode,model_version,odds_games,an_games,unmatched,bov_absent,ctx_misses,plays_
 2026-08-29T03:52:58.973160+00:00,close,2026-07-21.v14-suppressfix1,0,78,0,0,,0,0,0
 2026-08-29T08:18:29.744274+00:00,close,2026-07-21.v14-suppressfix1,0,75,0,0,,0,0,0
 2026-08-29T18:16:14.892026+00:00,full,2026-07-21.v14-suppressfix1,0,77,0,0,0,0,0,0
+2026-08-29T23:29:25.595606+00:00,full,2026-07-21.v14-suppressfix1,0,77,0,0,0,0,0,1
