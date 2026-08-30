@@ -18068,11 +18068,13 @@
       "close_point": null,
       "close_ts": "2026-08-16T22:57:15.250291+00:00",
       "close_obs": 33,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.49,
+      "clv_fair": -6.66,
       "date": "2026-08-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -1.71,
+      "clv_measured": true
     },
     {
       "away": "Atlanta Braves",
@@ -18696,11 +18698,13 @@
       "close_point": null,
       "close_ts": "2026-08-16T22:57:15.250311+00:00",
       "close_obs": 30,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -1.35,
+      "clv_fair": -10.28,
       "date": "2026-08-09",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -3.98,
+      "clv_measured": true
     },
     {
       "away": "Memphis Tigers",
@@ -18744,11 +18748,13 @@
       "close_point": null,
       "close_ts": "2026-08-16T22:57:15.250320+00:00",
       "close_obs": 30,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -1.79,
+      "clv_fair": -7.67,
       "date": "2026-08-09",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.87,
+      "clv_measured": true
     },
     {
       "away": "Houston Astros",
@@ -18924,8 +18930,8 @@
       "close_point": null,
       "close_ts": "2026-08-16T22:57:15.250326+00:00",
       "close_obs": 26,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -1.79,
+      "clv_fair": -7.67,
       "hours_to_game": 465.94,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -18955,8 +18961,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-08-10",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.75,
+      "clv_fair_mult": -4.87,
+      "clv_measured": true
     },
     {
       "away": "New York Mets",
