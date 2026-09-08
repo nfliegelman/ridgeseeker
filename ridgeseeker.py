@@ -34,7 +34,7 @@ if not ODDS_KEY:
         try: ODDS_KEY = open(_kf).read().strip()
         except Exception: pass
 # Stamp every logged bet so history survives retunes and versions can be compared.
-MODEL_VERSION = "2026-08-14.v15-tiersplit1"
+MODEL_VERSION = "2026-09-08.v15-tiersplit1-cap250"
 HISTORY_FOLDER = "ridgeseeker_history"           # timestamped HTMLs saved here
 # Auto-detect: are we running on GitHub's servers (cloud) or on a personal laptop?
 CI = (os.environ.get("GITHUB_ACTIONS") == "true") or bool(os.environ.get("EDGEFINDER_CI"))
@@ -216,8 +216,16 @@ EXECUTABLE_BOOKS = ('Bovada',)
 # compares net-of-fee EV and Kalshi does not get credited for money it takes back.
 EXECUTABLE_VENUES = ('bovada', 'polymarket', 'kalshi')
 
-# Sanity gate
+# Sanity gate. NOTE: gate() is only consulted on the VALUE path, so LONGSHOT_CAP has
+# never constrained a sharp-only rec. MAX_BET_PRICE below is the cap that actually
+# binds every play; see suggest_units for why it exists and what it costs to omit.
 MIN_EV, LONGSHOT_CAP, EV_CEILING, MIN_BOOKS = 0.03, 500, 0.25, 3
+
+# Hard ceiling on the entry price of ANY bet, sharp or value. Above this the
+# money-vs-ticket signal is arithmetically degenerate (see suggest_units) and every
+# such play in the tool's history has lost. This is the "+250 longshot cap" the
+# README has always described, now actually enforced instead of merely reducing stake.
+MAX_BET_PRICE = 250
 
 # Your unit size in dollars. Change this when you level up ($10 -> $20 -> $50).
 # The app tracks your results and tells you when you've earned the next level.
@@ -1391,6 +1399,28 @@ def suggest_units(card):
     so longshots never earn more than 1u no matter how strong the signal."""
     sg = card.get('sharp_grade'); v = card.get('value_play')
     has_value = card.get('has_value'); rec = card.get('rec')
+    # v15.3 HARD PRICE CEILING. The README has promised a "+250 longshot cap" since
+    # the beginning and the `longshot` branch below has always existed — but it only
+    # reduced the STAKE to 1u, it never refused the play. gate()'s LONGSHOT_CAP=500
+    # guards the value path only, and the value path has never fired even once. So
+    # sharp-only recs have been free to bet +1000 and worse, and did.
+    #
+    # All 6 real plays ever logged above +250 lost: 0-6 for -6.00u, with a median
+    # clv_fair of -38.78 on the four above +500. Total real P&L across the whole
+    # ledger is -4.68u, so those six bets ARE the loss — capped at +250 the same
+    # history is 37-45 for +1.32u (+1.5% ROI).
+    #
+    # The mechanism is that the sharp-money framework degenerates at extreme prices.
+    # `contrarian` means "tickets <= 35%", which above +500 is 100% automatic: the
+    # median ticket share there is 3%, because almost nobody backs a 3% shot. So a
+    # +1400 college football dog passes the contrarian test by arithmetic, and its
+    # money-vs-ticket gap is noise on a handful of tickets. The grade is meaningless,
+    # not strong. This is a price band where the signal does not exist, so no grade
+    # earns a bet — which is what the documented cap always intended.
+    if rec:
+        try: _p = float(rec.get('price'))
+        except (TypeError, ValueError): _p = None
+        if _p is not None and _p > MAX_BET_PRICE: return (None, None)
     if not rec: return (None, None)
     price = rec.get('price')
     try: price = float(price)

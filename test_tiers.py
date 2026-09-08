@@ -126,6 +126,24 @@ check("no longer seeded from r.get('ev')", "_cand={'bovada':r.get('ev')}" in src
 check("polymarket compared at the ask, not the mid",
       "_cand['polymarket']=play['poly_ev_ask']" in src, True)
 
+print("\nhard price ceiling: no bet above MAX_BET_PRICE, whatever the grade")
+# All 6 real plays ever logged above +250 lost (0-6, -6.00u), which is the entire
+# ledger loss. Above +500 `contrarian` is 100% automatic because the median ticket
+# share is 3%, so the sharp grade there is arithmetic, not signal.
+def sized(price, grade='S', has_value=False, ev=None, contrarian=True, steam=True):
+    return rs.suggest_units({
+        'sharp_grade': {'grade': grade, 'side': 'TeamA', 'contrarian': contrarian, 'steam': steam},
+        'value_play': ({'side': 'TeamA', 'ev': ev} if ev is not None else None),
+        'has_value': has_value,
+        'rec': {'price': price, 'side': 'TeamA'}})[0]
+check("S grade at -110 still sized", sized(-110) is not None, True)
+check("S grade at +250 (on the cap) still sized", sized(+250) is not None, True)
+check("S grade at +251 refused", sized(+251), None)
+check("S grade at +1400 refused", sized(+1400), None)
+check("value play at +600 refused too", sized(+600, has_value=True, ev=0.10), None)
+check("cap does not disturb a normal 1.5u value play",
+      sized(-120, has_value=True, ev=0.05), 1.5)
+
 print("\nvenue routing: picks the cheapest executable venue, never creates a bet")
 check("bovada-only candidates -> bovada",
       rs.route_venue({'bovada': {'ev': -0.048, 'price': -115, 'dec': 1.87}})[0], 'bovada')

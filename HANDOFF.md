@@ -162,6 +162,37 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.3 (2026-09-08), the "+250 longshot cap" the README always promised is now actually enforced. MODEL_VERSION BUMPED to `2026-09-08.v15-tiersplit1-cap250`: this refuses plays, so selection changes.**
+
+  **The bug.** `suggest_units` has always had a `longshot` branch and the README has always advertised "a hard +250 longshot cap" — but the branch only reduced the STAKE to 1u, it never refused the bet. The real ceiling, `LONGSHOT_CAP=500`, lives in `gate()`, which is consulted *only on the value path* — and the value path has never fired once in the tool's life (v15, item 2). So sharp-only recs have had no price ceiling at all, and took +775, +950, +1200, +1600.
+
+  **The damage, on the full 88-bet settled ledger through Sep 8.** Six plays ever logged above +250. **All six lost: 0-6, -6.00u**, median `clv_fair` -38.78 on the four above +500. Total real P&L across the entire history is -4.69u — *those six bets are the whole loss and then some.* Every one is college football.
+
+  | entry price | n | record | units | ROI | median CLV |
+  |---|---|---|---|---|---|
+  | ≤ +250 | 82 | 37-45 | **+1.32** | +1.5% | -3.67 |
+  | +250 to +500 | 2 | 0-2 | -2.00 | -100% | -19.79 |
+  | > +500 | 4 | 0-4 | -4.00 | -100% | -38.78 |
+
+  **Why it is a mechanism and not a data-mine.** The sharp framework degenerates at extreme prices. `contrarian` means `tickets <= 35%`; above +500 the *median ticket share is 3%*, so the test passes **100% automatically** — almost nobody backs a 3% shot. The money-vs-ticket gap there is noise across a handful of tickets. The grade is not strong, it is arithmetic. This is a price band where the signal does not exist, which is exactly what the documented cap always intended to express.
+
+  **Cumulative effect, all 88 settled real bets:**
+
+  | configuration | bets | units | ROI |
+  |---|---|---|---|
+  | as it actually ran (v14) | 88 | -4.69 | -4.84% |
+  | v15 tier split | 36 | +1.00 | +2.24% |
+  | v15 + v15.3 cap | 31 | +6.00 | +15.19% |
+  | **v15 + cap + v15.2 routing** | **31** | **+6.70** | **+16.96%** |
+
+  The cap alone, on unchanged v14 selection, turns -4.69u into +1.31u. **Caveats that matter more than the headline:** +16.96% on 31 bets is noise-dominated, and the cap threshold was picked after seeing this history. What justifies it is that it enforces a pre-existing documented rule with an a-priori mechanism, not that it backtests well. An "enter within 24h" filter was also tested and **rejected** — it made results worse (-4.5% vs +1.5%), so no timing cut ships.
+
+  **Out-of-sample check on v15 itself** (33 settled plays logged Aug 15 - Sep 5, after the tier rule was designed): P&L supports it — the v15 bet set lost 0.16u where the old model lost 2.78u, and the dropped rows ran -13.8% ROI. CLV was noisier and initially looked bad (-11.24 for the kept set), but that resolved into a sport-mix artifact: mean CLV collapsed in the post period (-4.52 to -10.47) while the **median barely moved** (-4.47 to -4.88), and the split is entirely CFB — MLB n=61 mean -3.42/median -4.40, NCAAF n=38 mean **-21.78**/median **-15.47** with 16 of 38 rows below -20. The tier rule is not what broke; uncapped college-football longshots were. Verdict: v15 is neither confirmed nor refuted out-of-sample at n=33; it needs the ~60 measured closes the CLV power calc calls for.
+
+  **Standing concern.** College football entered on `_default` thresholds copied from baseball and is now ~40% of logged volume while running -25.1% ROI and -21.78% mean CLV. The price cap removes its worst expression, but CFB has not earned per-sport calibration and should be watched closely; consider disabling it in `SPORTS` if the next 30 rows look like the last 38.
+
+  Files: `ridgeseeker.py` (MAX_BET_PRICE, suggest_units, MODEL_VERSION), `test_tiers.py` (+6 assertions, 44 total), README.md.
+
 - **v15.2 (2026-08-14), venue routing: bet the same games at a cheaper counter. Owner confirmed Polymarket and Kalshi are usable alongside Bovada. MODEL_VERSION unchanged — selection is untouched; only the venue the money goes to changes.**
 
   **What ships.** New `EXECUTABLE_VENUES = ('bovada','polymarket','kalshi')` and a `route_venue()` that picks the best net-of-fee price among them for a bet that has *already* cleared selection. Each play logs `bet_venue`/`bet_price`/`bet_dec`/`bet_ev`, the board prints "Bet at Polymarket @ 47¢ · +3.2 pts vs Bovada", and `grade_pending` now settles P&L at `bet_dec` — the price actually paid — falling back to the Bovada American price for every pre-routing row so history grades byte-identically. Kalshi's decimal is taken net of its per-order taker fee through the same cost basis `kalshi_ev` uses, so it is never credited for money the fee takes back. `clv`/`clv_fair` deliberately stay on the Bovada basis: the pre-registered endpoint measures the MODEL against the closing line and must not move because execution moved.
