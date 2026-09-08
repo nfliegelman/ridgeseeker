@@ -193,6 +193,54 @@ GRADE_THRESHOLDS = {
     '_default': {'S':25, 'A':25, 'B':13, 'C':9, 'D':6},
 }
 
+# Sports cleared to receive REAL MONEY, keyed by SPORTS['key'] (not 'kind': ncaaf and
+# nfl share kind 'americanfootball' but are completely different boards). Everything
+# else is measurement-only — graded, shown, and logged to the signal lab at zero units,
+# never staked. A sport is promoted here when its own graded rows show the framework
+# is not broken on it, which is the data the shadow ledger exists to produce.
+#
+# THE CFB EPISODE, recorded because the first diagnosis was wrong and the correction
+# matters more than the original claim.
+#
+# College football joined Aug 1 on `_default` thresholds copied from baseball, and by
+# Sep 8 was ~40% of logged volume at -25.1% ROI with -20.23 mean clv_fair against
+# MLB's -4.27. Its distributions really are alien to the baseball fit:
+#
+#   metric                        MLB                    CFB
+#   median money-vs-ticket gap    14                     20
+#   share clearing the S/A gate   19.5%                  38.3%
+#   median ticket share           49%                    4%
+#   share passing "contrarian"    35%                    93.6%
+#   grades produced               6% S, 18% A, 54% D     0% S, 49% A, 15% D
+#   books priced per game         28                     16
+#   median entry, hours pre-game  5.6                    95.3
+#
+# The obvious inference was that the thresholds were the defect and CFB should be
+# barred until refitted. That inference was WRONG, and segmenting by price showed why:
+# CFB's catastrophic CLV lived entirely in the longshots, which v15.3's MAX_BET_PRICE
+# now refuses outright. Measured on what would actually be bet after that cap:
+#
+#   CFB, all rows                    n=43  mean clv_fair -20.23  median -10.28
+#   CFB, price <= +250               n=19  mean  -3.46           median  -3.05
+#   CFB, cap + v15 bet set           n=10  mean  -2.08           median  -1.86
+#   MLB, cap + v15 bet set           n=27  mean  -0.18           median  -2.77
+#
+# Post-cap CFB is indistinguishable from the MLB bet set the thresholds were fitted
+# on — its median is better. Barring it would also have discarded 6 real bets that
+# went 6-0 for +7.99u, on a theory the evidence does not support. The ticket-share and
+# grade-mix oddities above are real observations, but they did not translate into
+# worse closes once longshots were gone, and a structural argument that fails its own
+# empirical test does not get to veto money.
+#
+# So CFB stays live, ON WATCH: n=10 measured rows is ~5-6 independent games, most from
+# one opening-weekend slate, and its median entry is still 95 hours pre-game. If the
+# next 30 rows revert to the earlier pattern, drop 'ncaaf' from this set.
+#
+# NFL (window opens in September), NBA/NHL (October) and CBB have ZERO graded rows and
+# stay measurement-only. That is the actual lesson: not "baseball thresholds are
+# wrong everywhere" but "do not stake a board you have never graded."
+CALIBRATED_SPORTS = {'mlb', 'ncaaf'}
+
 # Books you can actually place a bet at. This is the single largest lever on realized
 # EV in the whole system and it is NOT a model parameter: across 1,114 pregame ML legs
 # the median Bovada price was -4.39% EV against devigged Pinnacle, while the median
@@ -1129,6 +1177,10 @@ function recLine(t){
     const dollars=t.unit_dollars?(' · $'+Math.round(t.units*t.unit_dollars)):'';
     const uc = t.units>=2?'u2':(t.units>=1.5?'u15':'u1');
     unitHtml=`<span class="unitbadge ${uc}">${t.units}u${dollars}</span>`;
+  } else if(t.uncalibrated){
+    // Graded and shown, deliberately not staked: this sport has no thresholds of
+    // its own yet and is running on the baseball copy. Signal lab only.
+    unitHtml=`<span class="badge b-PASS">DO NOT BET · uncalibrated sport</span>`;
   }
   // alt markets for sharp-only plays
   let altHtml='';
@@ -2242,6 +2294,11 @@ def main():
     _proj=len(_asp)*(2*_per_full+2*_per_close)*31
     if _proj>PLAN_CREDITS:
         print(f"  !! CREDIT WARNING: {len(_asp)} active sport(s) at 2 full + 2 close/day projects ~{_proj}/month vs plan {PLAN_CREDITS}. Fix: fewer sports, RS_BOOKMAKERS=1 after RS_MODE=verify passes, or the $30 20K plan (then set RS_PLAN_CREDITS=20000 in the workflow).")
+    _uncal=[s for s in _asp if s['key'] not in CALIBRATED_SPORTS]
+    if _uncal:
+        print(f"  ·  MEASUREMENT-ONLY this run (uncalibrated, shadow rows only, no real bets): "
+              f"{', '.join(s['label'] for s in _uncal)}")
+        print(f"     These run on _default thresholds copied from baseball. See CALIBRATED_SPORTS.")
     if RUN_MODE=='verify':
         run_verify(_asp); return
     raw_payloads=[]
@@ -2268,7 +2325,16 @@ def main():
             c['sharp_grade']=sg
             c['rec']=build_recommendation(c, sg) if (hours_until(c['time']) or 0)>0 else None
             u, ureason = suggest_units(c)
+            # Uncalibrated sport: graded and shown, but never staked. No units means
+            # no entry in _top and nothing logged as a real play, while the signal lab
+            # keeps grading every lean S-D against real closes so the sport can earn
+            # its own thresholds. See CALIBRATED_SPORTS for what this cost in CFB.
+            # units_reason stays None: the board renders it as "<units>u: <reason>",
+            # which would read "nullu:" with no stake. The flag below carries the label.
+            if key not in CALIBRATED_SPORTS:
+                u, ureason = None, None
             c['units']=u; c['units_reason']=ureason
+            c['uncalibrated']=(key not in CALIBRATED_SPORTS)
             c['unit_dollars']=UNIT_DOLLARS
             # strip internal keys
             c.pop('_sharp_raw',None); c.pop('_soft_fair',None)
@@ -2334,6 +2400,7 @@ def main():
                 # that was supposed to make an_ml reach plays has been dead since it
                 # shipped (255/255 snapshots have it, 0/49 plays do).
                 top.append({'sport':sport.upper(),'sport_key':sport,
+                            'uncalibrated':c.get('uncalibrated'),
                             'away':c['away'],'home':c['home'],'time':c['time'],
                             'event_id':c.get('event_id'),'an_ml':c.get('an_ml'),
                             'grade':sg['grade'] if sg else None,'rec':rec,'sg':sg,'has_value':c.get('has_value'),

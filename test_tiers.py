@@ -126,6 +126,26 @@ check("no longer seeded from r.get('ev')", "_cand={'bovada':r.get('ev')}" in src
 check("polymarket compared at the ask, not the mid",
       "_cand['polymarket']=play['poly_ev_ask']" in src, True)
 
+print("\ncalibration gate: only graded boards receive real money")
+# Keyed on SPORTS['key'], never 'kind' — ncaaf and nfl share kind 'americanfootball'
+# but are different boards, and only one of them has ever been graded.
+check("mlb is cleared", 'mlb' in rs.CALIBRATED_SPORTS, True)
+check("ncaaf is cleared (post-cap CLV matches MLB's bet set)",
+      'ncaaf' in rs.CALIBRATED_SPORTS, True)
+check("nfl is NOT cleared (zero graded rows)", 'nfl' in rs.CALIBRATED_SPORTS, False)
+check("nba is NOT cleared", 'nba' in rs.CALIBRATED_SPORTS, False)
+check("nhl / ncaab are NOT cleared",
+      ('nhl' in rs.CALIBRATED_SPORTS) or ('ncaab' in rs.CALIBRATED_SPORTS), False)
+check("gate keys on sport key, not kind (nfl must not ride on ncaaf)",
+      "key not in CALIBRATED_SPORTS" in src, True)
+check("gate is at the units funnel, so SPORTS stays enabled for the signal lab",
+      "kind not in CALIBRATED_SPORTS" in src, False)
+check("shadow ledger still runs for them (build_shadow_plays is sport-agnostic)",
+      "if sport.startswith('_'): continue" in src, True)
+# every cleared key must be a real registry key, or the gate silently blocks everything
+check("cleared keys all exist in SPORTS",
+      rs.CALIBRATED_SPORTS <= {s['key'] for s in rs.SPORTS}, True)
+
 print("\nhard price ceiling: no bet above MAX_BET_PRICE, whatever the grade")
 # All 6 real plays ever logged above +250 lost (0-6, -6.00u), which is the entire
 # ledger loss. Above +500 `contrarian` is 100% automatic because the median ticket

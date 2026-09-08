@@ -162,6 +162,25 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.4 (2026-09-08), graded-boards-only gate, and a corrected CFB diagnosis. MODEL_VERSION unchanged from v15.3: no sport currently betting is affected; this is a forward guard.**
+
+  **New `CALIBRATED_SPORTS = {'mlb','ncaaf'}`**, keyed on `SPORTS['key']` and NOT on `kind` — `ncaaf` and `nfl` share kind `americanfootball` but are different boards, and keying on kind would let NFL ride in on CFB's evidence. A sport not in the set is measurement-only: graded, shown on the board with a `DO NOT BET · uncalibrated sport` badge, fully logged to the signal lab at zero units, never staked. Enforced at the `suggest_units` funnel so `SPORTS` stays enabled and the shadow ledger keeps producing exactly the data needed to promote it later. Startup prints which sports are measurement-only this run.
+
+  **The correction, recorded because the first diagnosis was wrong.** v15.3 flagged CFB as a standing concern on -25.1% ROI and -20.23 mean `clv_fair`, and the obvious next step was to bar it until its thresholds were refit — its distributions genuinely are alien to the baseball fit (median ticket share 4% vs 49%, "contrarian" passing 93.6% vs 35%, 49% of the board grading A vs 18%, 16 books priced vs 28, median entry 95h pre-game vs 5.6h). **That inference was wrong.** Segmenting by price shows CFB's catastrophic CLV lived entirely in the longshots that v15.3's `MAX_BET_PRICE` already refuses:
+
+  | slice | n | mean clv_fair | median |
+  |---|---|---|---|
+  | CFB, all rows | 43 | **-20.23** | -10.28 |
+  | CFB, price ≤ +250 | 19 | -3.46 | -3.05 |
+  | CFB, cap + v15 bet set | 10 | **-2.08** | **-1.86** |
+  | MLB, cap + v15 bet set | 27 | -0.18 | -2.77 |
+
+  Post-cap CFB is indistinguishable from the MLB bet set the thresholds were fitted on — its median is better. A blanket bar would also have discarded 6 real bets that went 6-0 for +7.99u. The structural oddities are real observations, but they did not translate into worse closes once longshots were gone, and **a structural argument that fails its own empirical test does not get to veto money.** CFB stays live, on watch: n=10 is ~5-6 independent games, most from one opening-weekend slate, and median entry is still 95 hours out. If the next 30 rows revert, drop `ncaaf` from the set.
+
+  **What the episode actually taught:** not "baseball thresholds are wrong everywhere" but "do not stake a board you have never graded." NFL's window opens in September and NBA/NHL in October, all on the same `_default` copy with zero graded rows — without this gate each repeats the CFB experiment with real money. On the 88-bet history v15.4 changes nothing (every surviving bet is already MLB or CFB); it is purely forward-looking.
+
+  Files: `ridgeseeker.py` (CALIBRATED_SPORTS, suggest_units funnel, startup notice, board badge, top row flag), `test_tiers.py` (+9 assertions, 53 total).
+
 - **v15.3 (2026-09-08), the "+250 longshot cap" the README always promised is now actually enforced. MODEL_VERSION BUMPED to `2026-09-08.v15-tiersplit1-cap250`: this refuses plays, so selection changes.**
 
   **The bug.** `suggest_units` has always had a `longshot` branch and the README has always advertised "a hard +250 longshot cap" — but the branch only reduced the STAKE to 1u, it never refused the bet. The real ceiling, `LONGSHOT_CAP=500`, lives in `gate()`, which is consulted *only on the value path* — and the value path has never fired once in the tool's life (v15, item 2). So sharp-only recs have had no price ceiling at all, and took +775, +950, +1200, +1600.
