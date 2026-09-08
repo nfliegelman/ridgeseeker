@@ -162,6 +162,136 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.5 (2026-09-08), "when will we know?" made into an instrument, and the day-game hole in close capture. MODEL_VERSION unchanged: measurement and scheduling only.**
+
+  **The question.** The record cannot settle whether this works on any human timescale — at the observed per-bet variance a real 3.5% edge needs ~4,000 settled bets, about 21 years at current volume. `clv_fair` can, because it scores the price rather than the coin flip: sd ~7.9 points, so a ±2pt interval closes in ~60 measured closes.
+
+  **New `verdict` stat + "Do we know yet?" card** on the Results tab: 95% CI on mean `clv_fair`, a progress bar toward a callable answer, weeks remaining at the observed arrival rate, and an explicit CLOCK NOT STARTED state. Two design decisions worth keeping:
+  - **Only rows from the CURRENT rule count**, matched on `model_version`. A row logged under an older rule was selected by different criteria, so folding it in answers a question nobody asked. This means a deliberate rule change resets n to zero — the honest price of changing the rule, and the reason the card says "clock not started" today rather than inheriting 91 rows of older evidence.
+  - **Zero-unit shadow rows count here**, alongside staked ones. They watch the same signal at the same entry timing on the same uniform ML basis and carry no money, so they are rightly excluded from the record and the money endpoint — but for "is the signal real" they are evidence, and they roughly double the sample for free. A separate, clearly-labelled retrospective pass re-derives the current ladder from historical raw features **for arrival-rate projection only**; it is in-sample and never treated as evidence.
+
+  Current reading: **0 of ~60 measured closes under `v15-tiersplit1-cap250`, ~13 weeks** at the retrospective rate of 4.5/week.
+
+  **The day-game hole.** Coverage on eligible rows is 65% — 20 of 57 graded plays never earn a measured close. The misses are not random: **15 of 20 have a first pitch between 17:00 and 20:00 UTC**. Those are day games, entered at the 15:00 full run, with no further observation until 21:30 — after first pitch — so `close_obs` stays 0 and the row is excluded rather than counted as zero (correctly; a seeded close is not a measurement). There is a 6.5-hour hole in the schedule and the day slate starts inside it.
+
+  A `17:30 UTC` close-capture cron sits before first pitch for ~18 of the 20 misses: coverage ~65% → ~96%, arrival ~4.5 → ~6.7 qualifying closes/week, **~13 weeks → ~9**. It buys those rows from bets already being made. Added to the workflow **commented out** (cost: h2h-only, 2 credits/run, ~62/month, ~31 with `RS_BOOKMAKERS=1`), following the repo's existing convention for budget-gated crons. **Critically, its cron string is already mapped to `close` in the `RS_MODE` expression while still commented** — without that it would fall through to `full` on being uncommented and start logging plays at 17:30, changing entry timing, which is exactly the failure `RS_MODE=observe` exists to prevent. `test_tiers.py` asserts both the mapping and that the live cron set is unchanged.
+
+  Files: `ridgeseeker.py` (verdict stat, Results card), `.github/workflows/ridgeseeker.yml` (commented cron + mode mapping), `test_tiers.py` (+5 assertions, 58 total), README.md.
+
+- **v15.4 (2026-09-08), graded-boards-only gate, and a corrected CFB diagnosis. MODEL_VERSION unchanged from v15.3: no sport currently betting is affected; this is a forward guard.**
+
+  **New `CALIBRATED_SPORTS = {'mlb','ncaaf'}`**, keyed on `SPORTS['key']` and NOT on `kind` — `ncaaf` and `nfl` share kind `americanfootball` but are different boards, and keying on kind would let NFL ride in on CFB's evidence. A sport not in the set is measurement-only: graded, shown on the board with a `DO NOT BET · uncalibrated sport` badge, fully logged to the signal lab at zero units, never staked. Enforced at the `suggest_units` funnel so `SPORTS` stays enabled and the shadow ledger keeps producing exactly the data needed to promote it later. Startup prints which sports are measurement-only this run.
+
+  **The correction, recorded because the first diagnosis was wrong.** v15.3 flagged CFB as a standing concern on -25.1% ROI and -20.23 mean `clv_fair`, and the obvious next step was to bar it until its thresholds were refit — its distributions genuinely are alien to the baseball fit (median ticket share 4% vs 49%, "contrarian" passing 93.6% vs 35%, 49% of the board grading A vs 18%, 16 books priced vs 28, median entry 95h pre-game vs 5.6h). **That inference was wrong.** Segmenting by price shows CFB's catastrophic CLV lived entirely in the longshots that v15.3's `MAX_BET_PRICE` already refuses:
+
+  | slice | n | mean clv_fair | median |
+  |---|---|---|---|
+  | CFB, all rows | 43 | **-20.23** | -10.28 |
+  | CFB, price ≤ +250 | 19 | -3.46 | -3.05 |
+  | CFB, cap + v15 bet set | 10 | **-2.08** | **-1.86** |
+  | MLB, cap + v15 bet set | 27 | -0.18 | -2.77 |
+
+  Post-cap CFB is indistinguishable from the MLB bet set the thresholds were fitted on — its median is better. A blanket bar would also have discarded 6 real bets that went 6-0 for +7.99u. The structural oddities are real observations, but they did not translate into worse closes once longshots were gone, and **a structural argument that fails its own empirical test does not get to veto money.** CFB stays live, on watch: n=10 is ~5-6 independent games, most from one opening-weekend slate, and median entry is still 95 hours out. If the next 30 rows revert, drop `ncaaf` from the set.
+
+  **What the episode actually taught:** not "baseball thresholds are wrong everywhere" but "do not stake a board you have never graded." NFL's window opens in September and NBA/NHL in October, all on the same `_default` copy with zero graded rows — without this gate each repeats the CFB experiment with real money. On the 88-bet history v15.4 changes nothing (every surviving bet is already MLB or CFB); it is purely forward-looking.
+
+  Files: `ridgeseeker.py` (CALIBRATED_SPORTS, suggest_units funnel, startup notice, board badge, top row flag), `test_tiers.py` (+9 assertions, 53 total).
+
+- **v15.3 (2026-09-08), the "+250 longshot cap" the README always promised is now actually enforced. MODEL_VERSION BUMPED to `2026-09-08.v15-tiersplit1-cap250`: this refuses plays, so selection changes.**
+
+  **The bug.** `suggest_units` has always had a `longshot` branch and the README has always advertised "a hard +250 longshot cap" — but the branch only reduced the STAKE to 1u, it never refused the bet. The real ceiling, `LONGSHOT_CAP=500`, lives in `gate()`, which is consulted *only on the value path* — and the value path has never fired once in the tool's life (v15, item 2). So sharp-only recs have had no price ceiling at all, and took +775, +950, +1200, +1600.
+
+  **The damage, on the full 88-bet settled ledger through Sep 8.** Six plays ever logged above +250. **All six lost: 0-6, -6.00u**, median `clv_fair` -38.78 on the four above +500. Total real P&L across the entire history is -4.69u — *those six bets are the whole loss and then some.* Every one is college football.
+
+  | entry price | n | record | units | ROI | median CLV |
+  |---|---|---|---|---|---|
+  | ≤ +250 | 82 | 37-45 | **+1.32** | +1.5% | -3.67 |
+  | +250 to +500 | 2 | 0-2 | -2.00 | -100% | -19.79 |
+  | > +500 | 4 | 0-4 | -4.00 | -100% | -38.78 |
+
+  **Why it is a mechanism and not a data-mine.** The sharp framework degenerates at extreme prices. `contrarian` means `tickets <= 35%`; above +500 the *median ticket share is 3%*, so the test passes **100% automatically** — almost nobody backs a 3% shot. The money-vs-ticket gap there is noise across a handful of tickets. The grade is not strong, it is arithmetic. This is a price band where the signal does not exist, which is exactly what the documented cap always intended to express.
+
+  **Cumulative effect, all 88 settled real bets:**
+
+  | configuration | bets | units | ROI |
+  |---|---|---|---|
+  | as it actually ran (v14) | 88 | -4.69 | -4.84% |
+  | v15 tier split | 36 | +1.00 | +2.24% |
+  | v15 + v15.3 cap | 31 | +6.00 | +15.19% |
+  | **v15 + cap + v15.2 routing** | **31** | **+6.70** | **+16.96%** |
+
+  The cap alone, on unchanged v14 selection, turns -4.69u into +1.31u. **Caveats that matter more than the headline:** +16.96% on 31 bets is noise-dominated, and the cap threshold was picked after seeing this history. What justifies it is that it enforces a pre-existing documented rule with an a-priori mechanism, not that it backtests well. An "enter within 24h" filter was also tested and **rejected** — it made results worse (-4.5% vs +1.5%), so no timing cut ships.
+
+  **Out-of-sample check on v15 itself** (33 settled plays logged Aug 15 - Sep 5, after the tier rule was designed): P&L supports it — the v15 bet set lost 0.16u where the old model lost 2.78u, and the dropped rows ran -13.8% ROI. CLV was noisier and initially looked bad (-11.24 for the kept set), but that resolved into a sport-mix artifact: mean CLV collapsed in the post period (-4.52 to -10.47) while the **median barely moved** (-4.47 to -4.88), and the split is entirely CFB — MLB n=61 mean -3.42/median -4.40, NCAAF n=38 mean **-21.78**/median **-15.47** with 16 of 38 rows below -20. The tier rule is not what broke; uncapped college-football longshots were. Verdict: v15 is neither confirmed nor refuted out-of-sample at n=33; it needs the ~60 measured closes the CLV power calc calls for.
+
+  **Standing concern.** College football entered on `_default` thresholds copied from baseball and is now ~40% of logged volume while running -25.1% ROI and -21.78% mean CLV. The price cap removes its worst expression, but CFB has not earned per-sport calibration and should be watched closely; consider disabling it in `SPORTS` if the next 30 rows look like the last 38.
+
+  Files: `ridgeseeker.py` (MAX_BET_PRICE, suggest_units, MODEL_VERSION), `test_tiers.py` (+6 assertions, 44 total), README.md.
+
+- **v15.2 (2026-08-14), venue routing: bet the same games at a cheaper counter. Owner confirmed Polymarket and Kalshi are usable alongside Bovada. MODEL_VERSION unchanged — selection is untouched; only the venue the money goes to changes.**
+
+  **What ships.** New `EXECUTABLE_VENUES = ('bovada','polymarket','kalshi')` and a `route_venue()` that picks the best net-of-fee price among them for a bet that has *already* cleared selection. Each play logs `bet_venue`/`bet_price`/`bet_dec`/`bet_ev`, the board prints "Bet at Polymarket @ 47¢ · +3.2 pts vs Bovada", and `grade_pending` now settles P&L at `bet_dec` — the price actually paid — falling back to the Bovada American price for every pre-routing row so history grades byte-identically. Kalshi's decimal is taken net of its per-order taker fee through the same cost basis `kalshi_ev` uses, so it is never credited for money the fee takes back. `clv`/`clv_fair` deliberately stay on the Bovada basis: the pre-registered endpoint measures the MODEL against the closing line and must not move because execution moved.
+
+  **Backtested on the 46 settled plays carrying a quote** — same games, same outcomes, same selection, only the counter changed: 36/46 route to Polymarket, turning -8.46u (-15.82% ROI) into -6.73u (-12.58%), worth **+1.74u on 53.5u risked**. Stacked with the v15 tier split on the full real ledger:
+
+  | scenario | bets | units | ROI |
+  |---|---|---|---|
+  | as it actually ran | 52 | -6.39 | -10.66% |
+  | + v15 tier split only | 21 | -0.59 | -2.07% |
+  | + v15.2 routing only | 52 | -4.66 | -7.76% |
+  | **+ both (what ships)** | **21** | **+0.05** | **+0.18%** |
+
+  In-sample on the data that motivated both changes, and 21 bets settles nothing. Directional only.
+
+  **The trap that was deliberately NOT taken.** Polymarket prices 10 of 48 logged plays at +3% EV or better against our devigged Pinnacle fair — which looks exactly like the value engine finally opening, on a venue we can now reach. It is not. **Those ten went 3-7 and closed at -10.16% CLV**, the worst bucket in the file, against a model expectation of 46%. Across all 28 rows with a quote and a measured close, the correlation between "our fair likes this side more than Polymarket's midpoint does" and `clv_fair` is **-0.64**, monotonic across buckets (+2.34 when Polymarket likes it more, -4.67 when they agree, -10.16 when we do). Polymarket's mid sits a mean 0.23 points from our fair with a 3.6-point sd: that is a venue *agreeing* with us, not a soft book. So the apparent gap is our Pinnacle snapshot going stale, and buying it would rebuild the v15 phantom-edge bug with a different stale denominator. **Routing therefore takes Polymarket's price and ignores its apparent edge**, and `route_venue` can only re-price a bet, never create one — asserted in `test_tiers.py`. Caveat on the -0.64: `clv_fair` shares the `fair` term, so part of that relationship is mechanical and must be untangled before it earns a gate. Logged as `pm_disagree` for exactly that work; it gates nothing at n=28.
+
+  Files: `ridgeseeker.py` (EXECUTABLE_VENUES, route_venue, routing block, grade_pending, recLine, CSV), `test_tiers.py` (+9 assertions, 38 total).
+
+- **v15.1 (2026-08-14), the sport-casing bug: one string case silently killed six shipped features, including a safety suppression. Plus a real execution edge found in data already being fetched. MODEL_VERSION unchanged from v15 (no selection logic changes; the news-window suppression becomes ABLE to fire, which is a repair of stated v14 behaviour, not a new rule).**
+
+  **(1) `top` uppercases `sport`; every downstream guard compares lowercase.** `top.append({'sport':sport.upper(), ...})`, then five guards read `t.get('sport')=='mlb'` — always False. Everything behind those guards has been silently null on real plays since the day it shipped. Verified in the betlog: of 49 real plays carrying the keys, **0** have a non-null value for `mlb_gamePk`, `venue`, `day_night`, `probable_away/home`, `wx_*`, `roof`, `park_rf_approx`, or any `kalshi_*` field. Dead: F29 (MLB Stats context — the "master join key to the entire MLB stats universe"), F36 weather/park factors, the scratch-detector stamps, the F39 Kalshi join, and **the v14 news-window suppression** — a safety rule the v14.4 remediation pass specifically believed it had repaired. The v14.4 fix was correct; it just read the uppercased key. `pm_miss` reported 0 across all 83 runs and looked like an all-clear, but it only increments when both team codes resolve, which requires entering the block the guard never let it reach. Fixed by carrying `sport_key` (lowercase registry key) alongside the display `sport`, and repointing all five guards. Live-verified against the Kalshi API: 45/45 open MLB events resolve through `KALSHI_MLB`, so the feed returns on the next full run.
+
+  **(2) `an_ml` never reached plays either — fourth instance of the same bug class.** `top` simply did not forward it. It is present on 255/255 snapshot rows and 0/49 plays. The HANDOFF has now logged this failure mode four times (F35, F45c, this, and #1 above): *a field verified at the fetch boundary but never across the attachment boundary.* Worth a standing check rather than another one-off fix — the cheap version is asserting non-null counts on a sample of logged plays, not just on the fetch.
+
+  **(3) `exec_best_venue` structurally excluded Bovada.** The candidate set seeded `{'bovada': r.get('ev')}`, but `build_recommendation` puts no `ev` key on either rec type, so it was None on every play and filtered one line later. All 48 logged plays named polymarket or betonline as "best venue" — guaranteed by construction, not observed. Bovada's EV is now computed from the same `fair x decimal-odds` identity used everywhere else, and Polymarket is compared at the **ask** rather than the mid, since a midpoint is not a fill.
+
+  **(4) The finding that matters: Polymarket is materially cheaper than Bovada for the same bet.** Recomputed honestly over the 48 plays carrying a quote:
+
+  | venue | mean EV | median EV |
+  |---|---|---|
+  | Bovada | -4.81% | -4.66% |
+  | BetOnline | -2.68% | -2.61% |
+  | Polymarket (mid) | -0.18% | -0.43% |
+  | **Polymarket (ask — taker)** | **-1.40%** | **-1.60%** |
+  | Polymarket (bid — maker) | +1.08% | +0.60% |
+
+  At the ask — paying the spread, the honest worst case — Polymarket beats Bovada by **+3.41 points** and wins on **38/48** plays. Quotes are tight: median bid-ask **1 cent**, max 3. **15/48 plays price at 0% EV or better at the ask, and 10/48 clear +3%** — the value threshold Bovada has never once cleared in 1,114 pregame legs. This needs no offshore sportsbook account. Logged as `poly_ev_ask`/`poly_ev_bid`/`poly_spread`/`venue_gain`, surfaced as a "Cheaper venue for the same bet" card. **Open question the data cannot answer: depth.** The quote proves the price existed, not that a $10-50 stake fits inside it; verify on live books before trusting it.
+
+  **(5) Explicit negative results, recorded so nobody re-mines them.** (a) *The devig math is fine.* Over 399 settled rows the Pinnacle-anchored fair predicted 199.0 wins against 194 actual — inside noise — and power vs multiplicative devig differ by a mean of 0.004 points (max 0.77). Tuning the devig is not where the money is. (b) *Further bet filtering is exhausted.* Every additional cut tried on the v15 bet set (num_bets, hours-to-game, price band, deeper contrarian, steam magnitude) moves a 23-row sample by amounts well inside noise, with no a-priori mechanism. The v15 split was justified by a large effect on n=32 plus a mechanical reason; these are not, and stacking them would be data-mining. **The remaining lever is execution price, not selection.** (c) `pin_age_min` is 0-2 min on 252/252 rows, so the stale-anchor suppression has never had occasion to fire.
+
+  Files: `ridgeseeker.py` (top dict, five sport guards, poly ask/bid EV, exec_best_venue, compute_stats venue card, Results tab, CSV columns), `test_tiers.py` (+7 assertions), FUTURE.md.
+
+- **v15 (2026-08-14), tier split + phantom-value fix + price-shopping measurement. MODEL_VERSION BUMPED to `2026-08-14.v15-tiersplit1`: the S/A definition changes, so play selection changes.** Triggered by the owner's read of the dashboard — "S tier is doing pretty darn good but my A tier is all over the place, and there's minimal stuff in the other tiers." All three observations were correct and each had a distinct cause.
+
+  **(1) The A tier was three populations wearing one label.** The ladder read `elif (gap>=th['A'] and contrarian) or (gap>=th['S'])`. That trailing clause admitted any gap ≥25 to A with *no contrarian test*, and the demotion guard beneath it (`not contrarian and tickets>=55`) left the entire 36-54% ticket band ungraded by any public-side check. Decomposing every S/A row ever logged:
+
+  | branch | n | mean CLV | median CLV | units |
+  |---|---|---|---|---|
+  | S: gap≥25, contrarian, steam | 27 | **+0.74** | -3.52 | +1.09 |
+  | A1: gap≥25, contrarian, no steam | 13 | **-0.46** | -0.26 | -1.67 |
+  | A3: gap 20-25, contrarian | 22 | -5.41 | -5.36 | -2.35 |
+  | A2: gap≥25, **not contrarian** | 32 | **-8.27** | -7.84 | -3.21 |
+
+  A2 was the worst bucket in the entire system — worse than D — and it supplied a third of every real bet placed. The mechanism is not statistical: money% > ticket% is evidence of sharp action only when the ticket count is LOW (few bets carrying much money is a syndicate); the same gap on a side the public is also buying is one whale inside a crowd, or a heavy favorite drawing large stakes. Both look identical in the gap alone. v15 makes contrarian a hard prerequisite for S and A, caps non-contrarian leans at B (still measured in the signal lab, never bet), and moves the `A` threshold 20→25 since A3 was indistinguishable from the D baseline. Re-graded on the same history the real bet set goes from 49 bets / -8.45u / -3.84% CLV to 22 bets / -0.58u / **+0.08% CLV**; the 27 dropped bets carried -7.87u and -6.79% CLV. IN-SAMPLE CAVEAT, stated plainly: the rule was chosen after seeing these numbers and 22 bets proves nothing on its own. The a-priori mechanism is what justifies it; the forward CLV is what will settle it. Locked by `test_tiers.py`.
+
+  **(2) The value engine has never once fired on a pregame game.** All 15 value flags in the tool's history came from games that had ALREADY STARTED (`hours_to_game` -0.14 to -2.96); pregame flags: zero, across 673 graded observations. After first pitch Bovada reprices to the live game state while the devigged anchor is still the pregame number, so the comparison manufactures 3-23% "edges" out of a stale denominator. F25's clock guard meant none were ever bet, but they reached the signal lab and the dashboard looking like a working value engine. `has_value`/`value_play` are now pregame-gated at the source. Underneath that bug is a harder fact: backfilling 1,114 pregame Bovada ML legs against devigged Pinnacle, **zero** cleared MIN_EV=3% and the best edge ever offered was +0.91% (median -4.39%). On one book the value threshold is unreachable by construction — the tool is a sharp-money follower whose value gate cannot open. README and FUTURE.md now say so.
+
+  **(3) "Minimal stuff in the other tiers" is by design, and correct.** Only S/A (or a value+sharp double) enter `_top`, and only `_top` is logged as a real play, so B/C never receive money. That should stay: shadow B closed at -3.32% and C at -4.72%. The tiers below A are empty because they have no edge, not because they are being missed.
+
+  **(4) Price shopping, now measured instead of estimated — and it is larger than every edge in the repo.** Same 1,114 legs: median Bovada -4.39% EV vs median best-of-books -1.17%, with Bovada holding the best number on 2.2% of legs. The roadmap costed this at 0.5-1.5%; it is ~3.2 points. For scale, the best signal population in the system (contrarian+steam) closed at -2.94% against a -4.42% Bovada baseline — about 1.5 points of edge, against a 4.4-point vig. **On a single book the vig is larger than the edge and no threshold change closes that gap.** Realistic ladders: Bovada+BetOnline -2.37%, offshore six -1.95%, offshore six + legal US four -1.60%. New `EXECUTABLE_BOOKS` config (currently `('Bovada',)`, owner-confirmed) drives `avail_price`/`avail_book`/`avail_ev` on every play; `best_ev` and `shop_gain` record the forfeited EV, aggregated into a "Cost of one book" card on the Results tab. Note the pre-existing `exec_best_venue`/`exec_best_ev` fields are a *different* cross-venue metric (Bovada/BetOnline/Kalshi/Polymarket) — the new sportsbook-restricted fields are deliberately named `avail_*` to avoid collision.
+
+  Files: `ridgeseeker.py` (grade_sharp, analyze_game value gate, bo_best/shop_fields, compute_stats, Results tab, MODEL_VERSION), `test_tiers.py` (new, 22 assertions, no network), README.md, FUTURE.md.
+
 - **v14.5 (2026-08-01), multi-sport grading fix + West-coast close + F26 verify mode + close-side devig capture. MODEL_VERSION unchanged: nothing here touches play selection, sizing, thresholds, or the pre-registered endpoint definition; every change is settlement correctness, measurement cadence, or log-only capture (precedent: v12.1, v13, v14.3).**
   (1) PER-SPORT GRADING FIXED (the FUTURE.md "Grading is MLB-only by construction" latent bug): `collect_results` read finals ONLY from `boxscore.stats.{away,home}.runs`, which exists just for baseball, so every NFL/NBA/NHL/CFB/CBB bet would have sat ungraded and voided after 72h — the n=150 falsification gate was literally unreachable across the autumn. It now falls back to the sport-generic `boxscore.total_{away,home}_points`. VERIFIED LIVE (2026-08-01): equal to `runs` on 42/42 completed MLB games across 4 days of AN payloads, and populated on completed WNBA games where `stats` arrives `{}` (the basketball shape). Baseball keeps the proven `runs` path byte-identically. Totals reflect the official final incl. OT/SO, which is what books settle, so ML/spread/total/puck-line grading is right for every registry sport. Tested: 5 synthetic payload shapes (runs-only, totals-only, neither→skip, OT hockey, inprogress→ignored) + 6 `_grade_one` market/sport cases incl. NFL spread push and NBA total push + a real July WNBA payload that now yields 3 finals where the old code yielded 0. Residual: no completed NFL/NHL payload existed to check on Aug 1; eyeball each new sport's first graded week.
   (2) WEST-COAST CLOSE RUN LIVE: the 01:45 UTC close-capture cron is enabled (the RS_MODE mapping already handled it). Why now: measured-close coverage was 47% and measured accrual ~0.8/day, making coverage the binding constraint on the pre-registered clv_fair timeline (n>=50 measured); the lone 22:45 close run structurally misses every West start. MLB-only cost ~496/31-day month, inside the free 500. The 13:30 observe cron stays commented pending F26.

@@ -4,9 +4,18 @@ Finds real sports betting edges (MLB now; more sports in season) and tracks whet
 
 ## How it decides
 - **Fair value:** Pinnacle (the sharpest book in the world) with the vig stripped out. When Pinnacle skips a market, the no-vig median of ~25 books fills in.
-- **Value bet:** Bovada's price beats fair value by 3%+ after sanity gates (longshot cap, plausibility ceiling, minimum book count).
-- **Sharp money:** ticket% vs money% gaps from Action Network, graded S/A/B/C/D. Treated as a secondary signal until the tracker proves it earns its keep.
-- **Unit sizing:** 1u / 1.5u / 2u with a hard +250 longshot cap.
+- **Sharp money:** ticket% vs money% gaps from Action Network, graded S/A/B/C/D. This is what the tool actually bets. S and A require *contrarian* confirmation — a big money-vs-ticket gap only counts as sharp when the ticket count is low, because few bets carrying much money is a syndicate while the same gap inside a crowd is just a whale on a popular side.
+- **Value bet:** Bovada's price beats fair value by 3%+ after sanity gates. **Honest status: this has never fired on a pregame game.** Across 1,114 pregame moneyline legs the best edge Bovada ever offered was +0.91%, median -4.39%. On one book the threshold is unreachable, so today the tool is a sharp-money follower and the value gate is dormant. It reopens when you add a second book.
+- **Unit sizing:** 1u / 1.5u / 2u, and a hard **+250 price ceiling that refuses the bet outright** (`MAX_BET_PRICE`). Until v15.3 that cap only shrank the stake, so the tool was free to back +1600 longshots — all six plays it ever made above +250 lost, and they account for the entire lifetime loss. Above that price the sharp signal is arithmetically degenerate: "contrarian" means a ticket share under 35%, and almost nobody backs a 3% shot, so every longshot passes automatically.
+
+## The thing that decides whether this makes money
+Not the model — **the price you pay to get the bet on**. Every signal in here is worth at most ~1.5 points of edge, while the median Bovada moneyline costs -4.39% against devigged Pinnacle. On one counter the vig is bigger than the edge and no threshold tuning changes that.
+
+So the tool now routes each selected bet to the cheapest venue you can actually reach (`EXECUTABLE_VENUES`, currently Bovada + Polymarket + Kalshi) and tells you where to put it. Measured on the logged history the same bet prices at -4.81% EV at Bovada versus -1.40% at Polymarket's ask, so routing is worth about +3.4 points per bet with **no change to what gets bet**. Kalshi is compared net of its taker fee. P&L is graded at the price actually paid.
+
+One thing it deliberately does not do: treat a cheap prediction-market quote as a *reason* to bet. Polymarket priced 10 of 48 logged plays at +3%-or-better against our fair, and those ten went 3-7 with -10.16% CLV. That gap is our Pinnacle anchor going stale, not an edge appearing — Polymarket's midpoint agrees with our fair to within a quarter of a point on average. Take its price; ignore its apparent edge.
+
+**Liquidity is the open question.** A quote proves the price existed, not that your stake fits inside it. Check depth at your real bet size before trusting the routing.
 
 ## How it grades itself
 - Every recommended play is logged and graded automatically off final scores.
@@ -19,6 +28,18 @@ Covers MLB now, with NFL, NBA, NHL, college football, and college basketball lig
 
 ## Honest use
 Paper trade until CLV is positive over 100+ bets. Level-up gates ($10 to $20 to $50 units) are built in and deliberately strict.
+
+Where it stands after ~9 weeks (through Sep 8): 88 settled real bets, 37-51, -4.8% ROI as it actually ran. With everything in v15-v15.3 applied to that same history it is 31 bets for +16.96% — but read that as "the leaks are plugged", not "the edge is proven". 31 bets is noise, and each fix was chosen after seeing the data it repairs. What earns them is that all three enforce documented intent with a mechanism behind it: non-contrarian gaps are not sharp money, a devigged anchor cannot price a game already in progress, and the money-vs-ticket signal is degenerate above +250.
+
+Watch the CLV, not the ledger. At this per-bet variance a real 3.5% edge needs ~4,000 bets before the win/loss record could confirm it — about 21 years at current volume — while EV-at-close resolves a +3pt edge in roughly 27 measured closes.
+
+**"Do we know yet?"** is now a card on the Results tab, so you never have to work this out by hand. It counts only rows produced by the *current* rule (a deliberate rule change resets the clock — that is the honest price of changing it), counts zero-unit shadow rows alongside staked ones since they watch the same signal for free, and reports the 95% interval, the progress bar toward a callable answer, and the weeks remaining at the observed arrival rate. Today: **0 of ~60 measured closes, roughly 13 weeks** at ~4.5/week.
+
+The cheapest way to shorten that is not betting more — it is **close-capture coverage**, currently 65%. The 35% that go unmeasured are not random: 15 of 20 misses have a first pitch between 17:00 and 20:00 UTC. Those are day games, entered at the 15:00 run with no further observation until 21:30, by which point they have already started. A commented `17:30 UTC` close cron in the workflow closes that hole — coverage ~65% → ~96%, arrival ~4.5 → ~6.7/week, roughly 13 weeks → 9. It costs ~62 credits/month (~31 with `RS_BOOKMAKERS=1`). Uncomment it when the budget allows; it is already mapped to `close` mode, so it can never start logging plays at a new entry time.
+
+**Only graded boards get staked.** `CALIBRATED_SPORTS` lists the sports cleared for real money (MLB and college football today). Everything else — NFL, NBA, NHL, college basketball — is measurement-only: graded, shown with a `DO NOT BET` badge, logged to the signal lab at zero units, never staked, until its own graded rows show the framework holds there. New sports otherwise inherit thresholds fitted to baseball, which is a guess.
+
+College football is the reason that rule exists, and also the reason it isn't stricter. It joined on borrowed thresholds and ran -25.1% ROI with -20.2% EV-at-close, which looked like proof that borrowed thresholds are fatal. They weren't: all of that damage lived in longshots, and once the +250 cap refuses those, CFB's remaining bets close at -1.9% median against MLB's -2.8%. It stays live, on watch — that verdict rests on ~5 games from one weekend. The v15 tier split is a response to that — the old A tier merged three different populations, and the worst of them (large gap, but the public on the same side) closed at -8.27% CLV while supplying a third of every bet placed. Re-graded on the same history the surviving bet set closes at +0.08% instead of -3.84%. Two caveats worth keeping in front of you: that is an in-sample backtest on the data that motivated the change, and 22 bets is far too few to call an edge either way. Judge it forward, on CLV, not on the record.
 
 ## Your data is safe when the code changes
 History lives in `ridgeseeker_betlog.json` and `ridgeseeker_snapshots.json`, separate from the code, committed back after every run. Zips from your AI assistant never include them.
