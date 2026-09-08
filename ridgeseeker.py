@@ -1327,6 +1327,40 @@ function renderResults(){
   if(evr&&evr.n){ h+=`<div class="rcard"><b>Expected vs realized:</b> stated EV summed to ${evr.exp>0?'+':''}${evr.exp}u across ${evr.n} settled bets; reality delivered ${evr.act>0?'+':''}${evr.act}u (gap ${evr.gap>0?'+':''}${evr.gap}u).<div class="rnote">A persistently large negative gap means stated edges are inflated. Meaningless before ~50 bets.</div></div>`; }
   const cr=S.clv_roll;
   if(cr&&cr.n>=10){ h+=`<div class="rcard"><b>Drift check:</b> EV-at-close rolling last ${cr.win}: ${pct(cr.roll)} vs cumulative ${pct(cr.cum)} (n=${cr.n}).<div class="rnote">Rolling far below cumulative suggests the edge is decaying or the market adapted (item 17).</div></div>`; }
+  const vd=S.verdict;
+  if(vd&&!vd.n){
+    h+=`<div class="rcard"><b>Do we know yet?</b> <span style="color:var(--mut);font-weight:700">CLOCK NOT STARTED</span>
+      <div class="rnote" style="margin-top:6px">No measured closes yet under the current rule (<code>${vd.version}</code>).
+      The endpoint counts only rows this rule produced — folding in rows chosen by an older rule would answer a
+      different question — so changing the rule deliberately resets the count. That is the honest price of a change.
+      ${vd.rate?`Qualifying rows have historically arrived at about <b>${vd.rate}/week</b>, so expect roughly
+      <b>${Math.round(vd.need/vd.rate)} weeks</b> to reach the ~${vd.need} closes needed to narrow the interval to
+      ±${vd.target} points.`:''}
+      Zero-unit shadow rows count here alongside staked ones: they watch the same signal at the same entry timing,
+      carry no money, and roughly double the sample for free.</div></div>`;
+  }
+  if(vd&&vd.n){
+    const prog=Math.min(100,Math.round(100*vd.n/Math.max(vd.need,1)));
+    const lbl={positive:'EDGE CONFIRMED',negative:'NO EDGE — the signal is negative',inconclusive:'NOT YET CALLABLE'}[vd.state];
+    const col={positive:'var(--sharpd)',negative:'#f87171',inconclusive:'var(--mut)'}[vd.state];
+    const band=(vd.lo!=null)?`${pct(vd.mean)} (95% CI ${pct(vd.lo)} to ${pct(vd.hi)})`:`${pct(vd.mean)} (CI needs more rows)`;
+    const eta=(vd.state!=='inconclusive')?'':(vd.weeks!=null?`~<b>${vd.weeks} more weeks</b> at the current ${vd.rate}/week`:'rate unknown');
+    h+=`<div class="rcard"><b>Do we know yet?</b> <span style="color:${col};font-weight:700">${lbl}</span>
+      <div class="rnote" style="margin-top:6px">
+      EV-at-close on the current bet-set rule: <b>${band}</b>, from ${vd.n} measured closes
+      (${vd.real} staked + ${vd.shadow} zero-unit shadow rows watching the same signal).
+      ${vd.state==='inconclusive'?`The interval still straddles zero. To narrow it to ±${vd.target} points needs about <b>${vd.need}</b> measured closes — ${vd.remaining} to go, ${eta}.`:`The interval has cleared zero.`}
+      </div>
+      <div style="height:7px;border-radius:4px;background:var(--line);overflow:hidden;margin:9px 0 4px">
+        <div style="height:100%;width:${prog}%;background:${col}"></div></div>
+      <div class="rnote">${prog}% of the way to a callable answer.
+      Coverage: ${vd.coverage}% of graded rows produced a real post-entry close; the rest entered too near first pitch
+      to be observed again and are excluded rather than counted as zero. Raising that percentage shortens the wait
+      more cheaply than betting more does.
+      <b>Why this and not the win/loss record:</b> at this per-bet variance a real 3.5% edge needs roughly 4,000
+      settled bets to show up in W/L — about 21 years at current volume. Scoring the price instead of the coin flip
+      gets there in weeks.</div></div>`;
+  }
   const vn=S.venue;
   if(vn&&vn.n){ h+=`<div class="rcard"><b>Cheaper venue for the same bet:</b> on ${vn.n} logged plays a non-Bovada venue priced the identical outcome better on ${vn.beat_pct}% of them, averaging <b>${vn.avg_pts>0?'+':''}${vn.avg_pts} points</b> of EV${vn.winners&&vn.winners.length?` (${vn.winners.map(w=>w[0]+' ×'+w[1]).join(', ')})`:''}.<div class="rnote">A prediction-market contract on the same game is the same bet at a different price, and needs no new sportsbook account. Priced at the ASK, i.e. what a taker actually pays, not the midpoint. Liquidity is the open question this number cannot answer: the quote says the price existed, not that your stake fits inside it. Check the depth on a few plays at your real stake before trusting it.</div></div>`; }
   const shp=S.shop;
@@ -2136,6 +2170,105 @@ def compute_stats(log_path, snap_path, unit_dollars):
     venue=({'n':len(vg),'avg_pts':round(100*sum(vg)/len(vg),2),
             'beat_pct':round(100*sum(1 for g in vg if g>0.0005)/len(vg)),
             'winners':sorted(vwin.items(), key=lambda kv:-kv[1])[:4]} if vg else None)
+    # ---- VERDICT PROGRESS (v15.5): when will we actually know? --------------------
+    # The record cannot answer "does this work" on any human timescale: at the observed
+    # per-bet variance a real 3.5% edge needs ~4,000 settled bets, which is ~21 years at
+    # current volume. clv_fair can, because it scores the PRICE rather than the coin
+    # flip, and its sd is ~7.9 points — a +2pt edge resolves in ~61 measured closes.
+    #
+    # Two things make this tractable that are easy to miss:
+    #   1. SHADOW ROWS COUNT. A zero-unit row matching the bet-set definition observes
+    #      the same signal, at the same entry timing, on the same uniform ML basis. It
+    #      carries no money, so it is rightly excluded from the record and the
+    #      pre-registered endpoint — but for "is the signal real" it is evidence, and
+    #      including it roughly doubles the sample with no risk. This section is
+    #      explicitly the SIGNAL question, kept separate from the money question above.
+    #   2. Coverage is the bottleneck, not volume. Rows entered close to first pitch
+    #      never get a post-entry pregame observation, so they are excluded rather than
+    #      counted as zero (correctly — a seeded close is not a measurement).
+    # The endpoint counts ONLY rows produced by the CURRENT selection rule, identified
+    # by model_version. A row logged under an older rule was chosen by different
+    # criteria, so folding it in would answer a question nobody is asking — the same
+    # pre-registration discipline the rest of this file keeps. Practically this means
+    # the clock starts at the first run on a new MODEL_VERSION and n resets on a
+    # deliberate rule change, which is the honest cost of changing the rule.
+    #
+    # A second, clearly-labelled retrospective pass re-derives the current ladder from
+    # each historical row's raw features (gap / tickets / steam / price / sport). That
+    # is in-sample and cannot be evidence, so it is used for ONE thing only: estimating
+    # how fast qualifying rows arrive, to project a wait.
+    _sd_floor=1e-9
+    def _betset(p, grade):
+        if grade not in ('S','A'): return False
+        if (p.get('sport') or '').lower() not in CALIBRATED_SPORTS: return False
+        try:
+            if float(p.get('price')) > MAX_BET_PRICE: return False
+        except (TypeError, ValueError): return False
+        return True
+    def _regrade(p):
+        """Current ladder re-derived from a logged row's raw features (see grade_sharp)."""
+        gap=p.get('gap'); tix=p.get('tickets')
+        if gap is None or tix is None: return None
+        th=GRADE_THRESHOLDS.get('baseball', GRADE_THRESHOLDS['_default'])
+        if gap<th['D']: return None
+        if not (tix<=35):
+            g='B' if gap>=th['B'] else ('C' if gap>=th['C'] else 'D')
+            return 'D' if tix>=55 else g
+        if gap>=th['S'] and p.get('steam'): return 'S'
+        if gap>=th['A']: return 'A'
+        return 'B' if gap>=th['B'] else ('C' if gap>=th['C'] else 'D')
+    _elig=[p for p in log['plays']
+           if p.get('model_version')==MODEL_VERSION and _betset(p, p.get('grade'))]
+    _grd=[p for p in _elig if p.get('result') is not None]
+    _msr=[p for p in _grd if p.get('clv_measured') and p.get('clv_fair') is not None]
+    # retrospective arrival rate (projection only, never evidence)
+    _retro=[p for p in log['plays'] if _betset(p, _regrade(p))
+            and p.get('clv_measured') and p.get('clv_fair') is not None]
+    _rate_ref=None
+    _rds=sorted(str(p.get('date') or '') for p in _retro if p.get('date'))
+    if len(_rds)>=2:
+        try:
+            _d0=datetime.fromisoformat(_rds[0]).date(); _d1=datetime.fromisoformat(_rds[-1]).date()
+            _rate_ref=round(len(_retro)/max(1,(_d1-_d0).days+1)*7,1)
+        except Exception: _rate_ref=None
+    verdict=None
+    if True:
+        vals=[p['clv_fair'] for p in _msr]
+        n=len(vals)
+        mean=(sum(vals)/n) if n else None
+        sd=(statistics.pstdev(vals) if n>1 else None)
+        half=(1.96*sd/(n**0.5)) if (sd and n>1 and sd>_sd_floor) else None
+        # Arrival rate of qualifying measured closes. Prefer the live rate once this
+        # rule has run long enough to have one; otherwise fall back to the
+        # retrospective estimate so a wait can still be projected on day one.
+        ds=sorted(str(p.get('date') or '') for p in _msr if p.get('date'))
+        rate=None; rate_src='live'
+        if len(ds)>=2:
+            try:
+                d0=datetime.fromisoformat(ds[0]).date(); d1=datetime.fromisoformat(ds[-1]).date()
+                span=max(1,(d1-d0).days+1); rate=round(n/span*7,1)
+            except Exception: rate=None
+        if not rate:
+            rate=_rate_ref; rate_src='projected'
+        # n needed so the 95% CI half-width is under TARGET points
+        TARGET=2.0
+        need=(round((1.96*(sd or 7.9)/TARGET)**2) if True else None)
+        state='inconclusive'
+        if half is not None and mean is not None:
+            if mean-half>0: state='positive'
+            elif mean+half<0: state='negative'
+        verdict={'n':n,'graded':len(_grd),'coverage':round(100*n/len(_grd)) if _grd else None,
+                 'mean':(round(mean,2) if mean is not None else None),
+                 'sd':(round(sd,2) if sd else None),
+                 'ci':(round(half,2) if half else None),
+                 'lo':(round(mean-half,2) if (mean is not None and half) else None),
+                 'hi':(round(mean+half,2) if (mean is not None and half) else None),
+                 'state':state,'target':TARGET,'need':need,
+                 'remaining':max(0,need-n),'rate':rate,'rate_src':rate_src,
+                 'weeks':(round(max(0,need-n)/rate,1) if (rate and rate>0) else None),
+                 'real':sum(1 for p in _msr if not p.get('shadow')),
+                 'shadow':sum(1 for p in _msr if p.get('shadow')),
+                 'version':MODEL_VERSION}
     # Expected vs realized (item 13): the earliest read on whether stated edges are
     # inflated. Settled only; voided bets never had money at risk.
     evs=[p for p in settled if p.get('ev') is not None and p.get('units')]
@@ -2203,6 +2336,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
     return {'overall':overall,
             'shadow':shadow,
             'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,'shop':shop,'venue':venue,
+            'verdict':verdict,
             'by_ev':by(ev_bucket, order=['3-5%','5-8%','8%+','sharp only (no price edge)']),
             'by_grade':by(lambda r:r.get('grade'), order=['S','A','B','C','D']),
             'by_units':by(lambda r:f"{r.get('units')}u"),

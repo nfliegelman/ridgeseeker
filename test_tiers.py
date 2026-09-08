@@ -126,6 +126,22 @@ check("no longer seeded from r.get('ev')", "_cand={'bovada':r.get('ev')}" in src
 check("polymarket compared at the ask, not the mid",
       "_cand['polymarket']=play['poly_ev_ask']" in src, True)
 
+print("\nverdict endpoint + close-capture schedule")
+check("endpoint counts only rows from the CURRENT rule (model_version match)",
+      "p.get('model_version')==MODEL_VERSION" in src, True)
+check("shadow rows count toward the SIGNAL question",
+      "'shadow':sum(1 for p in _msr if p.get('shadow'))" in src, True)
+wf = open(".github/workflows/ridgeseeker.yml").read()
+check("17:30 day-game close cron is present (commented until budget allows)",
+      "# - cron: '30 17 * * *'" in wf, True)
+check("...and is ALREADY mapped to close mode, so uncommenting cannot log plays",
+      "github.event.schedule == '30 17 * * *') && 'close'" in wf, True)
+# every cron that is live must map to an intended mode, never fall through to full
+import re as _re
+live = _re.findall(r"^\s*- cron: '([^']+)'", wf, _re.M)
+check("live crons are exactly the four intended runs",
+      sorted(live), sorted(['0 15 * * *', '30 21 * * *', '45 22 * * *', '45 1 * * *']))
+
 print("\ncalibration gate: only graded boards receive real money")
 # Keyed on SPORTS['key'], never 'kind' — ncaaf and nfl share kind 'americanfootball'
 # but are different boards, and only one of them has ever been graded.

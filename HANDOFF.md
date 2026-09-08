@@ -162,6 +162,22 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.5 (2026-09-08), "when will we know?" made into an instrument, and the day-game hole in close capture. MODEL_VERSION unchanged: measurement and scheduling only.**
+
+  **The question.** The record cannot settle whether this works on any human timescale — at the observed per-bet variance a real 3.5% edge needs ~4,000 settled bets, about 21 years at current volume. `clv_fair` can, because it scores the price rather than the coin flip: sd ~7.9 points, so a ±2pt interval closes in ~60 measured closes.
+
+  **New `verdict` stat + "Do we know yet?" card** on the Results tab: 95% CI on mean `clv_fair`, a progress bar toward a callable answer, weeks remaining at the observed arrival rate, and an explicit CLOCK NOT STARTED state. Two design decisions worth keeping:
+  - **Only rows from the CURRENT rule count**, matched on `model_version`. A row logged under an older rule was selected by different criteria, so folding it in answers a question nobody asked. This means a deliberate rule change resets n to zero — the honest price of changing the rule, and the reason the card says "clock not started" today rather than inheriting 91 rows of older evidence.
+  - **Zero-unit shadow rows count here**, alongside staked ones. They watch the same signal at the same entry timing on the same uniform ML basis and carry no money, so they are rightly excluded from the record and the money endpoint — but for "is the signal real" they are evidence, and they roughly double the sample for free. A separate, clearly-labelled retrospective pass re-derives the current ladder from historical raw features **for arrival-rate projection only**; it is in-sample and never treated as evidence.
+
+  Current reading: **0 of ~60 measured closes under `v15-tiersplit1-cap250`, ~13 weeks** at the retrospective rate of 4.5/week.
+
+  **The day-game hole.** Coverage on eligible rows is 65% — 20 of 57 graded plays never earn a measured close. The misses are not random: **15 of 20 have a first pitch between 17:00 and 20:00 UTC**. Those are day games, entered at the 15:00 full run, with no further observation until 21:30 — after first pitch — so `close_obs` stays 0 and the row is excluded rather than counted as zero (correctly; a seeded close is not a measurement). There is a 6.5-hour hole in the schedule and the day slate starts inside it.
+
+  A `17:30 UTC` close-capture cron sits before first pitch for ~18 of the 20 misses: coverage ~65% → ~96%, arrival ~4.5 → ~6.7 qualifying closes/week, **~13 weeks → ~9**. It buys those rows from bets already being made. Added to the workflow **commented out** (cost: h2h-only, 2 credits/run, ~62/month, ~31 with `RS_BOOKMAKERS=1`), following the repo's existing convention for budget-gated crons. **Critically, its cron string is already mapped to `close` in the `RS_MODE` expression while still commented** — without that it would fall through to `full` on being uncommented and start logging plays at 17:30, changing entry timing, which is exactly the failure `RS_MODE=observe` exists to prevent. `test_tiers.py` asserts both the mapping and that the live cron set is unchanged.
+
+  Files: `ridgeseeker.py` (verdict stat, Results card), `.github/workflows/ridgeseeker.yml` (commented cron + mode mapping), `test_tiers.py` (+5 assertions, 58 total), README.md.
+
 - **v15.4 (2026-09-08), graded-boards-only gate, and a corrected CFB diagnosis. MODEL_VERSION unchanged from v15.3: no sport currently betting is affected; this is a forward guard.**
 
   **New `CALIBRATED_SPORTS = {'mlb','ncaaf'}`**, keyed on `SPORTS['key']` and NOT on `kind` — `ncaaf` and `nfl` share kind `americanfootball` but are different boards, and keying on kind would let NFL ride in on CFB's evidence. A sport not in the set is measurement-only: graded, shown on the board with a `DO NOT BET · uncalibrated sport` badge, fully logged to the signal lab at zero units, never staked. Enforced at the `suggest_units` funnel so `SPORTS` stays enabled and the shadow ledger keeps producing exactly the data needed to promote it later. Startup prints which sports are measurement-only this run.
