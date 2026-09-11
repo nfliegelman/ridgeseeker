@@ -34914,11 +34914,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.459240+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.44,
       "date": "2026-09-10",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -3.56,
+      "clv_measured": false
     },
     {
       "away": "Arizona Wildcats",
