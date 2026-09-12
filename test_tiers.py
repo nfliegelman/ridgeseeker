@@ -126,6 +126,52 @@ check("no longer seeded from r.get('ev')", "_cand={'bovada':r.get('ev')}" in src
 check("polymarket compared at the ask, not the mid",
       "_cand['polymarket']=play['poly_ev_ask']" in src, True)
 
+print("\nper-sport ledger + feed-outage detection")
+import json as _json, tempfile, os as _os
+_tmp = tempfile.mkdtemp()
+_log = _os.path.join(_tmp, "betlog.json")
+_run = _os.path.join(_tmp, "ridgeseeker_runlog.json")
+_json.dump({"plays": [
+    # MLB: one staked win, one zero-unit shadow row
+    {"sport": "mlb", "grade": "S", "price": -110, "units": 1.0, "result": "win",
+     "units_pl": 0.91, "date": "2026-09-01", "clv_fair": 1.5, "clv_measured": True},
+    {"sport": "mlb", "grade": "A", "price": -120, "units": 0.0, "result": "loss",
+     "units_pl": 0.0, "date": "2026-09-02", "shadow": True, "clv_fair": -3.0,
+     "clv_measured": True},
+    # NFL: uncalibrated, so it must report staked=False even though a legacy bet exists
+    {"sport": "nfl", "grade": "A", "price": +105, "units": 1.0, "result": "loss",
+     "units_pl": -1.0, "date": "2026-09-07", "clv_fair": -2.0, "clv_measured": True},
+]}, open(_log, "w"))
+# an_games healthy while odds_games is zero = the credit-exhaustion signature
+_json.dump({"runs": [
+    {"ts": "2026-09-10T18:00", "mode": "full", "odds_games": 350, "an_games": 90, "closes": 12},
+    {"ts": "2026-09-11T00:30", "mode": "close", "odds_games": 14, "an_games": 91, "closes": 0},
+    {"ts": "2026-09-11T06:30", "mode": "close", "odds_games": 0, "an_games": 91, "closes": 0},
+    {"ts": "2026-09-12T18:00", "mode": "full", "odds_games": 0, "an_games": 100, "closes": 0},
+]}, open(_run, "w"))
+_s = rs.compute_stats(_log, _os.path.join(_tmp, "nosnaps.json"), 10)
+_bs = _s["by_sport"]
+check("per-sport ledger splits by sport", sorted(_bs.keys()), ["MLB", "NFL"])
+check("MLB staked (in CALIBRATED_SPORTS)", _bs["MLB"]["staked"], True)
+check("NFL NOT staked, despite carrying a legacy bet", _bs["NFL"]["staked"], False)
+check("NFL legacy bet still counted, not hidden", _bs["NFL"]["n"], 1)
+check("shadow rows excluded from a sport's staked record", _bs["MLB"]["n"], 1)
+check("...but counted in its shadow column", _bs["MLB"]["shadow_rows"], 1)
+check("shadow rows DO count toward a sport's EV-at-close", _bs["MLB"]["clv_n"], 2)
+check("per-sport cumulative curve is built", len(_bs["MLB"]["cumulative"]) >= 1, True)
+check("grade mix recorded per sport", "S" in _bs["MLB"]["grades"], True)
+_og = _s["outage"]
+check("outage detected", bool(_og), True)
+check("outage streak counts only zero-odds/healthy-AN runs", _og["streak"], 2)
+check("outage names the last run with any odds", _og["since"], "2026-09-11 00:30")
+check("...flags it as a PARTIAL fetch (the quota signature)", _og["partial"], True)
+check("...and names the last FULL board separately", _og["last_full"], "2026-09-10 18:00")
+# a healthy tail must clear the alarm
+_json.dump({"runs": [{"ts": "2026-09-12T18:00", "mode": "full", "odds_games": 300,
+                      "an_games": 100, "closes": 9}]}, open(_run, "w"))
+check("healthy feed reports no outage",
+      rs.compute_stats(_log, _os.path.join(_tmp, "nosnaps.json"), 10)["outage"], None)
+
 print("\nverdict endpoint + close-capture schedule")
 check("endpoint counts only rows from the CURRENT rule (model_version match)",
       "p.get('model_version')==MODEL_VERSION" in src, True)

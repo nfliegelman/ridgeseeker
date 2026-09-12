@@ -1322,6 +1322,26 @@ function renderResults(){
     const c=S.clv;
     h+=`<div class="rcard"><b>Closing line value:</b> EV at close avg ${pct(c.fair_avg)} (positive ${c.fair_pos==null?'-':c.fair_pos+'%'} of ${c.fair_n}) · price CLV avg ${pct(c.avg)} (beat the close ${c.pos_pct==null?'-':c.pos_pct+'%'} of ${c.n}).<div class="rnote">EV at close = the entry price scored against the devigged, Pinnacle-anchored fair probability at the last pregame observation: the market's final verdict on each bet, and the headline metric. Price CLV = entry vs the last Bovada price, same-book line movement. Coverage: ${c.n_measured} of ${c.n_graded} graded plays had a post-entry close observation${c.coverage==null?'':' ('+c.coverage+'%)'}; the rest are excluded, not counted as zero. The close is still the last reading this tool saw, an approximation given the run schedule.</div></div>`;
   }
+  // A dead odds feed must be impossible to scroll past: while it is down nothing is
+  // logged, no closes are captured, and the verdict clock is frozen.
+  const og=S.outage;
+  if(og&&og.streak>=2){
+    h+=`<div class="rcard" style="border:2px solid #f87171;background:rgba(248,113,113,.08)">
+      <b style="color:#f87171">⚠ ODDS FEED DOWN — ${og.streak} consecutive runs with zero games</b>
+      <div class="rnote" style="margin-top:6px">
+      Last full board: <b>${og.last_full||'?'} UTC</b> (~${og.typical||'?'} games/run is normal).
+      ${og.partial?`Then <b>${og.since} UTC returned only ${og.last_games} games</b> — a partial fetch — and every run since has returned zero.`:`Last run with any odds: ${og.since||'?'} UTC.`}
+      Action Network is still answering (${og.an_ok} games), so this is the Odds API specifically, not the network.
+      <b>While this is down nothing is logged, no closes are captured, and the verdict clock is frozen</b> —
+      pending bets can age out to void at 72h.
+      <div style="margin-top:6px"><b>${og.partial?'This is almost certainly exhausted monthly Odds API credits.':'Most likely cause: exhausted monthly Odds API credits.'}</b>
+      A partial run followed by zeroes, while AN stays healthy, is the quota signature — an upstream outage
+      cuts off cleanly instead. Check the startup CREDIT WARNING
+      and <code>x-requests-remaining</code>. Fixes, in order of effect: upgrade the Odds API plan (then set
+      <code>RS_PLAN_CREDITS</code>), set <code>RS_BOOKMAKERS=1</code> after a <code>mode: verify</code> run
+      passes (halves cost), or reduce active sports in <code>SPORTS</code>. If credits are fine, it is an
+      upstream outage — that one resolves itself.</div></div></div>`;
+  }
   h+=healthStrip();
   const evr=S.ev_real;
   if(evr&&evr.n){ h+=`<div class="rcard"><b>Expected vs realized:</b> stated EV summed to ${evr.exp>0?'+':''}${evr.exp}u across ${evr.n} settled bets; reality delivered ${evr.act>0?'+':''}${evr.act}u (gap ${evr.gap>0?'+':''}${evr.gap}u).<div class="rnote">A persistently large negative gap means stated edges are inflated. Meaningless before ~50 bets.</div></div>`; }
@@ -1369,6 +1389,66 @@ function renderResults(){
   if(cs&&cs.rows&&cs.rows.length&&S.clv&&S.clv.fair_n>=10){ h+=`<div class="rcard"><b>EV-at-close by segment</b> <span class="rnote">(exploratory only; the pre-registered endpoint is the overall number)</span>${cs.rows.map(r=>`<div class="rnote">${r.k}: ${pct(r.avg)} (n=${r.n})</div>`).join('')}</div>`; }
   h+=`<div class="rcard"><b>What normal variance looks like</b> (simulation at this tool's price and stake profile, 20k trials of 100 bets): even a model with a REAL +3.5% edge hits a median max drawdown of ~15u and an 8-loss streak, and still finishes negative about 40% of the time; a no-edge model lands anywhere in roughly -26u to +26u. At this sample size, judge the model on EV at close and CLV, not on the W/L record.</div>`;
   h+=`<h2 class="rsect">By stated EV</h2>`+simpleTbl(S.by_ev);
+  // ---- PER-SPORT LEDGER ----------------------------------------------------------
+  // Pooling sports hides exactly the problem you most need to see: CFB sat at -20
+  // EV-at-close for weeks inside a healthy-looking headline. Each board gets its own
+  // record, EV-at-close, coverage, grade mix and curve.
+  if(S.by_sport&&Object.keys(S.by_sport).length){
+    const SS=S.by_sport; const keys=Object.keys(SS).sort((a,b)=>SS[b].rows-SS[a].rows);
+    let rows='';
+    keys.forEach(k=>{
+      const s=SS[k];
+      const tag=s.staked
+        ?`<span class="badge b-VALUE">staked</span>`
+        :`<span class="badge b-PASS">measure only</span>`;
+      rows+=`<tr><td><b>${k}</b> ${tag}</td>`
+        +`<td>${s.n||0}${s.pending?` <span class="thin2">+${s.pending} pend</span>`:''}</td>`
+        +`<td>${s.win_pct==null?'-':s.win_pct+'%'}</td>`
+        +`<td class="${cls(s.units_pl||0)}">${(s.units_pl||0)>=0?'+':''}${s.units_pl||0}u</td>`
+        +`<td class="${cls(s.roi||0)}">${s.roi==null?'-':(s.roi>=0?'+':'')+s.roi+'%'}</td>`
+        +`<td>${s.clv_mean==null?'-':pct(s.clv_mean)}${s.clv_n?` <span class="thin2">n=${s.clv_n}</span>`:''}</td>`
+        +`<td>${s.clv_med==null?'-':pct(s.clv_med)}</td>`
+        +`<td>${s.coverage==null?'-':s.coverage+'%'}</td>`
+        +`<td class="thin2">${s.shadow_rows||0}</td></tr>`;
+    });
+    h+=`<h2 class="rsect">By sport</h2><table class="rtable">`
+      +`<tr><th scope="col">Sport</th><th scope="col">Bets</th><th scope="col">Win%</th>`
+      +`<th scope="col">Units</th><th scope="col">ROI</th><th scope="col">EV at close</th>`
+      +`<th scope="col">median</th><th scope="col">Close cov.</th><th scope="col">Shadow</th></tr>`
+      +rows+`</table>`
+      +`<div class="rnote">A <b>measure only</b> sport has no fitted thresholds yet (see CALIBRATED_SPORTS):
+        it is graded and shadow-logged but never staked, so no new bets there is correct, not a drought.
+        It can still show historical bets — those were logged before the gate existed, which is the case the
+        gate was added to stop.
+        These figures are the sport's WHOLE history under whatever rule was live at the time, so a sport can
+        look far worse here than under the current rule; the verdict card tracks the current rule only.
+        <b>EV at close is the column that matters</b> — the record is noise at these sample sizes, and a sport
+        can run a winning record on prices that close against it. Median beside the mean because a handful of
+        longshots can drag a mean 15 points on their own. Close coverage is the share of graded rows that
+        earned a real post-entry observation; low coverage means the sport's EV column is thinner than its
+        bet count suggests.</div>`;
+    // per-sport curves + grade mix
+    keys.forEach(k=>{
+      const s=SS[k];
+      let gm='';
+      Object.entries(s.grades||{}).forEach(([g,v])=>{
+        gm+=`<tr><td class="g" style="color:${GC[g]||'#9aa6b6'}">${g}</td><td>${v.n} <span class="thin2">(${v.pct}%)</span></td>`
+          +`<td>${v.graded?v.wins+'-'+(v.graded-v.wins):'-'}</td>`
+          +`<td>${v.clv==null?'-':pct(v.clv)}${v.clv_n?` <span class="thin2">n=${v.clv_n}</span>`:''}</td></tr>`;
+      });
+      const curve=(s.cumulative&&s.cumulative.length>1)
+        ?lineChart(s.cumulative,ud)
+        :`<div class="rnote">${s.n?'Not enough settled bets yet to draw a curve.':'No staked bets — measurement only.'}</div>`;
+      h+=`<h3 class="rsect" style="font-size:13px">${k} · ${s.first||'?'} to ${s.last||'?'}</h3>`
+        +`<div class="rcard">${curve}`
+        +(gm?`<table class="rtable" style="margin-top:8px"><tr><th scope="col">Grade</th><th scope="col">Rows</th>`
+            +`<th scope="col">W-L</th><th scope="col">EV at close</th></tr>${gm}</table>`
+            +`<div class="rnote">Grade mix is over ALL rows this sport produced, staked and shadow. The mix
+              itself is a calibration tell: MLB emits about 6% S and 18% A, so a board emitting 49% A is not
+              finding more edges, it is applying thresholds that do not fit it.</div>`:'')
+        +`</div>`;
+    });
+  }
   // by grade
   h+=`<h2 class="rsect">By sharp grade</h2>`+gradeTbl(S.by_grade);
   // Signal lab (shadow ledger): the answer to "do C leans or raw value flags carry
@@ -2115,6 +2195,97 @@ def compute_stats(log_path, snap_path, unit_dollars):
     cum=OrderedDict(); running=0.0
     for r in sorted(settled, key=lambda x:x.get('date','')):
         running+=(r.get('units_pl',0) or 0); cum[r.get('date','?')]=round(running,2)
+    # ---- FEED OUTAGE DETECTION (v15.6) --------------------------------------------
+    # A dead odds feed is silent: Action Network keeps answering, the run exits 0, the
+    # workflow goes green, and the only symptom is that nothing gets logged. It cost
+    # two days before anyone looked. The real-world cause is Odds API credit
+    # exhaustion, and its signature is distinctive — a partial run (quota runs out
+    # mid-fetch) followed by zeroes, while an_games stays healthy. Distinguishing that
+    # from "the API is down" matters because the fixes are opposite: wait, versus pay.
+    outage=None
+    try:
+        _rl=json.load(open(os.path.join(os.path.dirname(log_path),'ridgeseeker_runlog.json'))).get('runs',[])
+    except Exception:
+        _rl=[]
+    if _rl:
+        _streak=0
+        for r in reversed(_rl):
+            if (r.get('odds_games') or 0)==0 and (r.get('an_games') or 0)>0: _streak+=1
+            else: break
+        if _streak:
+            # The last run that returned ANY odds, and the last that returned a NORMAL
+            # number. When those differ, the in-between run is a partial fetch — quota
+            # ran out mid-run — which is the credit-exhaustion tell rather than an
+            # upstream outage. "Normal" is judged against the median of prior healthy
+            # runs so it adapts to however many sports are in season.
+            _nz=[r for r in _rl if (r.get('odds_games') or 0)>0]
+            _lastok=_nz[-1] if _nz else None
+            _hist=[r.get('odds_games') for r in _nz[:-1] if r.get('odds_games')]
+            _typ=(statistics.median(_hist) if _hist else None)
+            _partial=bool(_lastok and _typ and _lastok.get('odds_games') < 0.25*_typ)
+            _lastfull=next((r for r in reversed(_nz)
+                            if not _typ or (r.get('odds_games') or 0) >= 0.25*_typ), None)
+            outage={'streak':_streak,
+                    'since':(str(_lastok.get('ts'))[:16].replace('T',' ') if _lastok else None),
+                    'last_games':(_lastok.get('odds_games') if _lastok else None),
+                    'partial':_partial,
+                    'last_full':(str(_lastfull.get('ts'))[:16].replace('T',' ') if _lastfull else None),
+                    'typical':(round(_typ) if _typ else None),
+                    'an_ok':(_rl[-1].get('an_games') if _rl else None),
+                    'lost_closes':sum(1 for r in _rl[-_streak:] if not r.get('closes'))}
+    # ---- PER-SPORT LEDGER (v15.6) -------------------------------------------------
+    # Every aggregate above pools sports together, which stopped being defensible the
+    # moment a second board went live: MLB and college football have different price
+    # distributions, different ticket-share distributions, and different grade mixes,
+    # so a pooled ROI or EV-at-close is an average over populations that do not belong
+    # in the same average. It is also how CFB's -20 EV-at-close hid inside a headline
+    # number for weeks. Each sport now carries its own record, EV-at-close, close
+    # coverage, grade mix, shadow ledger and cumulative curve.
+    #
+    # `staked` records whether the sport is actually cleared for money
+    # (CALIBRATED_SPORTS); a measurement-only sport can accumulate a full shadow
+    # history here with no real bets at all, and should not be read as "flat".
+    def _sportkey(p): return (p.get('sport') or '?').upper()
+    by_sport={}
+    for _sp in sorted({_sportkey(p) for p in log['plays']}):
+        _all=[p for p in log['plays'] if _sportkey(p)==_sp]
+        _real=[p for p in _all if not p.get('shadow')]
+        _set=[p for p in _real if p.get('result') in ('win','loss')]
+        _shadow=[p for p in _all if p.get('shadow')]
+        _grd=[p for p in _all if p.get('result') is not None]
+        _msr=[p for p in _grd if p.get('clv_measured') and p.get('clv_fair') is not None]
+        _cf=[p['clv_fair'] for p in _msr]
+        # cumulative units for this sport only
+        _cum={}; _run=0.0
+        for r in sorted(_set, key=lambda x:x.get('date','')):
+            _run+=(r.get('units_pl',0) or 0); _cum[r.get('date','?')]=round(_run,2)
+        # grade mix across every row this sport produced (real + shadow), so a
+        # measurement-only sport still shows what its ladder is actually emitting —
+        # that mix is the tell for miscalibration (CFB emitted 49% A, MLB 18%).
+        _gm={}
+        for g in ('S','A','B','C','D'):
+            _gr=[p for p in _all if p.get('grade')==g]
+            if not _gr: continue
+            _gc=[p['clv_fair'] for p in _gr if p.get('clv_measured') and p.get('clv_fair') is not None]
+            _gs=[p for p in _gr if p.get('result') in ('win','loss')]
+            _gm[g]={'n':len(_gr),'pct':round(100*len(_gr)/len(_all)),
+                    'wins':sum(1 for p in _gs if p['result']=='win'),'graded':len(_gs),
+                    'clv_n':len(_gc),
+                    'clv':(round(sum(_gc)/len(_gc),2) if _gc else None)}
+        _ds=sorted(str(p.get('date') or '') for p in _all if p.get('date'))
+        by_sport[_sp]={
+            **agg(_set),
+            'rows':len(_all),'real':len(_real),'shadow_rows':len(_shadow),
+            'pending':len([p for p in _real if p.get('result') is None]),
+            'clv_n':len(_cf),
+            'clv_mean':(round(sum(_cf)/len(_cf),2) if _cf else None),
+            'clv_med':(round(statistics.median(_cf),2) if _cf else None),
+            'clv_pos':(round(100*sum(1 for c in _cf if c>0)/len(_cf)) if _cf else None),
+            'graded':len(_grd),
+            'coverage':(round(100*len(_msr)/len(_grd)) if _grd else None),
+            'grades':_gm,'cumulative':list(_cum.items()),
+            'first':(_ds[0] if _ds else None),'last':(_ds[-1] if _ds else None),
+            'staked':(_sp.lower() in CALIBRATED_SPORTS)}
     # edge-over-time from snapshots: avg gap by hours-to-game bucket
     edge_time={}
     if os.path.exists(snap_path):
@@ -2336,7 +2507,7 @@ def compute_stats(log_path, snap_path, unit_dollars):
     return {'overall':overall,
             'shadow':shadow,
             'clv':clv,'ev_real':ev_real,'clv_roll':clv_roll,'clv_seg':clv_seg,'shop':shop,'venue':venue,
-            'verdict':verdict,
+            'verdict':verdict,'by_sport':by_sport,'outage':outage,
             'by_ev':by(ev_bucket, order=['3-5%','5-8%','8%+','sharp only (no price edge)']),
             'by_grade':by(lambda r:r.get('grade'), order=['S','A','B','C','D']),
             'by_units':by(lambda r:f"{r.get('units')}u"),

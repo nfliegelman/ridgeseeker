@@ -162,6 +162,24 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.6 (2026-09-12), per-sport ledger + feed-outage alarm. MODEL_VERSION unchanged: reporting only.**
+
+  **LIVE INCIDENT THIS FOUND: the Odds API has returned zero games since 2026-09-11 and nobody noticed for two days.** Runlog signature: a full board on 09-10 23:18 (~126 games/run is typical), then 09-11 00:33 returned only **14 games** — a partial fetch — then six consecutive runs at zero while Action Network kept answering 91-101 games. That shape is exhausted monthly credits, not an upstream outage (an outage cuts off cleanly; a quota runs out mid-run). Confirmed by the projection: September has three sports in season (MLB, NFL, CFB), which on regions billing is `3 x (2 full x 6 + 2 close x 2) x 31 = ~1488 credits/month` against `PLAN_CREDITS=500`. October adds NBA and NHL (~2480), November adds CBB (~2976). Even `RS_BOOKMAKERS=1` only halves it to ~744, still over the free tier. **The free tier is structurally dead for a multi-sport autumn; the $30 20K plan is the only real fix.** While the feed is down nothing is logged, no closes are captured, the verdict clock is frozen, and pending bets can age out to void at 72h.
+
+  The failure was silent by construction: AN answers, the run exits 0, the workflow goes green. `healthStrip` did carry an `odds feed EMPTY` phrase, but only for `mode==='full'` and buried mid-sentence in a line of grey text. New `outage` stat + a red bordered banner at the top of the Results tab, firing on 2+ consecutive runs with `odds_games==0 AND an_games>0`. It names the last FULL board, the typical games-per-run (median of prior healthy runs, so it adapts to however many sports are live), flags the partial run explicitly, and gives the fixes in order of effect. Distinguishing partial-then-zero from clean-zero matters because the remedies are opposite: pay, versus wait.
+
+  **Per-sport ledger.** Every aggregate pooled sports together, which stopped being defensible the moment a second board went live — and is exactly how CFB sat at -19.2 mean `clv_fair` for weeks inside a healthy-looking headline. New `by_sport` stat and a "By sport" section: per-sport record, units, ROI, EV-at-close mean AND median, close coverage, shadow-row count, staked-vs-measurement-only badge, a cumulative-units curve, and a per-sport grade mix. Current live reading:
+
+  | sport | staked | bets | record | units | ROI | EV@close (n) | median | coverage |
+  |---|---|---|---|---|---|---|---|---|
+  | MLB | yes | 76 | 33-43 | -2.34 | -2.8% | **-4.40** (360) | -4.43 | 65% |
+  | NCAAF | yes | 18 | 6-12 | -4.51 | **-24.4%** | **-19.20** (46) | -8.89 | 92% |
+  | NFL | **no** | 1 | 0-1 | -1.00 | -100% | -1.40 (2) | -1.40 | 100% |
+
+  Two things worth reading off that table. **NFL shows a staked bet while marked measurement-only** — it was logged under v14, before the v15.4 gate existed, which is precisely the case the gate was added to stop; the gate is unmerged, so it is still happening. And the grade mix confirms the CFB miscalibration independently: MLB emits 6% S / 19% A, CFB emits 8% S / **40% A**. A board emitting twice the top-tier rate is not finding more edges, it is applying thresholds that do not fit it. Note these are whole-history figures under whatever rule was live at the time, so they look far worse than the current rule would produce — the verdict card tracks the current rule only, and the CFB clearance in `CALIBRATED_SPORTS` rests on the post-cap subset (n=12, -2.78), not on this -19.2.
+
+  Files: `ridgeseeker.py` (outage stat, by_sport stat, Results banner + By-sport section), `test_tiers.py` (+18 assertions, 76 total).
+
 - **v15.5 (2026-09-08), "when will we know?" made into an instrument, and the day-game hole in close capture. MODEL_VERSION unchanged: measurement and scheduling only.**
 
   **The question.** The record cannot settle whether this works on any human timescale — at the observed per-bet variance a real 3.5% edge needs ~4,000 settled bets, about 21 years at current volume. `clv_fair` can, because it scores the price rather than the coin flip: sd ~7.9 points, so a ±2pt interval closes in ~60 measured closes.

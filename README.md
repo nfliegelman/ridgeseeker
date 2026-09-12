@@ -26,6 +26,16 @@ One thing it deliberately does not do: treat a cheap prediction-market quote as 
 ## Schedule
 Covers MLB now, with NFL, NBA, NHL, college football, and college basketball lighting up automatically when their seasons start (off-season sports cost nothing, and every sport grades itself with no code changes needed). Four runs daily: 15:00 UTC (~10am Central: grades last night, morning board), 21:30 UTC (~4:30pm Central: pre-slate board with matured sharp money), 22:45 UTC (~5:45pm Central: a cheap close-capture pass before the night slate, no new plays), and 01:45 UTC (~8:45pm Central: the same cheap pass for the West-coast slate, roughly doubling how many bets get a truly measured close). Credit reality: MLB alone fits the free 500/month tier; the moment a second sport is in season (college football joined August 1) the startup log prints a credit warning with the fix — run the one-click `verify` mode from the Actions tab and flip `RS_BOOKMAKERS` to halve costs, and upgrade to the $30 Odds API plan before the 4-sport autumn.
 
+## Every sport tracked separately
+The Results tab has a **By sport** section: record, units, ROI, EV-at-close (mean *and* median), close coverage, shadow-row count, a cumulative-units curve and a grade mix, for each board independently. Pooling them hides the thing you most need to see — college football sat at −19.2% EV-at-close for weeks inside a healthy-looking headline number.
+
+The grade mix is itself a calibration tell: MLB emits about 6% S and 19% A, while CFB emits 8% S and **40% A**. A board emitting twice the top-tier rate isn't finding more edges, it's running thresholds that don't fit it.
+
+## If the board goes quiet, check the feed first
+A dead odds feed is silent: Action Network keeps answering, the run exits cleanly, the workflow goes green, and the only symptom is that nothing gets logged. A red banner now fires at the top of the Results tab after two consecutive runs with zero games.
+
+The usual cause is **exhausted Odds API credits**, and the tell is a partial run (quota ran out mid-fetch) followed by zeroes while Action Network stays healthy — an upstream outage cuts off cleanly instead. Credit reality with the current registry: three sports in season is ~1,488/month, five in October is ~2,480, six in November is ~2,976, all against a 500 free tier. `RS_BOOKMAKERS=1` only halves it. **The free tier cannot cover a multi-sport autumn — the $30 20K plan is the only real fix.** While the feed is down nothing is logged, no closes are captured, the verdict clock is frozen, and pending bets can age out to void at 72h.
+
 ## Honest use
 Paper trade until CLV is positive over 100+ bets. Level-up gates ($10 to $20 to $50 units) are built in and deliberately strict.
 
