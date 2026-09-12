@@ -31266,8 +31266,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392294+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.04,
+      "clv_fair": -6.32,
       "hours_to_game": 77.06,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -31297,8 +31297,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.5,
+      "clv_fair_mult": -4.99,
+      "clv_measured": true
     },
     {
       "away": "Wake Forest Demon Deacons",
@@ -32272,11 +32274,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392323+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.04,
+      "clv_fair": -6.32,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -4.99,
+      "clv_measured": true
     },
     {
       "away": "Appalachian State Mountaineers",
@@ -34838,8 +34842,8 @@
       "close_point": 36.5,
       "close_ts": "2026-09-10T23:18:56.459240+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.66,
       "hours_to_game": 23.68,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -34869,8 +34873,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-10",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -3.72,
+      "clv_measured": false
     },
     {
       "away": "Pittsburgh Pirates",
