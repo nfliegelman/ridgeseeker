@@ -31346,8 +31346,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392299+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.13,
+      "clv_fair": -6.88,
       "hours_to_game": 93.56,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -31377,8 +31377,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.5,
+      "clv_fair_mult": -5.8,
+      "clv_measured": true
     },
     {
       "away": "Houston Astros",
@@ -32324,11 +32326,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392328+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 14.29,
+      "clv_fair": 7.01,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": 11.07,
+      "clv_measured": true
     },
     {
       "away": "Arizona State Sun Devils",
@@ -32372,11 +32376,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392333+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -4.35,
+      "clv_fair": -23.26,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -10.02,
+      "clv_measured": true
     },
     {
       "away": "South Florida Bulls",
@@ -32420,11 +32426,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392338+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.04,
+      "clv_fair": -3.18,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -1.79,
+      "clv_measured": true
     },
     {
       "away": "Washington State Cougars",
@@ -32468,11 +32476,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392342+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 3.45,
+      "clv_fair": -20.87,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -0.95,
+      "clv_measured": true
     },
     {
       "away": "Oklahoma Sooners",
@@ -32516,11 +32526,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392347+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -0.69,
+      "clv_fair": -4.08,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.32,
+      "clv_measured": true
     },
     {
       "away": "Oregon Ducks",
@@ -32564,11 +32576,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392352+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -4.55,
+      "clv_fair": -41.18,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -11.52,
+      "clv_measured": true
     },
     {
       "away": "Wake Forest Demon Deacons",
@@ -32612,11 +32626,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392356+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.13,
+      "clv_fair": -6.88,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.8,
+      "clv_measured": true
     },
     {
       "away": "California Golden Bears",
@@ -32708,11 +32724,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392366+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -3.45,
+      "clv_fair": -28.81,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -10.03,
+      "clv_measured": true
     },
     {
       "away": "Maryland Terrapins",
@@ -32756,11 +32774,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392371+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.27,
+      "clv_fair": -11.97,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -3.3,
+      "clv_measured": true
     },
     {
       "away": "UCF Knights",
@@ -33758,8 +33778,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392446+00:00",
       "close_obs": 5,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 12.7,
+      "clv_fair": 5.53,
       "hours_to_game": 69.56,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -33789,8 +33809,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-09",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 2.55,
+      "clv_fair_mult": 9.53,
+      "clv_measured": true
     },
     {
       "away": "St. Louis Cardinals",
@@ -34234,11 +34256,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392451+00:00",
       "close_obs": 5,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.22,
+      "clv_fair": -5.9,
       "date": "2026-09-09",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -5.84,
+      "clv_measured": true
     },
     {
       "away": "Tennessee Volunteers",
@@ -34970,11 +34994,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.459240+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -7.15,
       "date": "2026-09-10",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -2.44,
+      "clv_measured": false
     }
   ]
 }
