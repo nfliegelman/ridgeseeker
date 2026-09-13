@@ -14,6 +14,25 @@ on:
     # inside the free 500. Multi-sport autumn needs RS_BOOKMAKERS or the $30
     # plan regardless — the startup CREDIT WARNING prints the projection.
     - cron: '45 1 * * *'
+    # ---- 17:30 UTC close-capture: THE DAY-GAME GAP (v15.5). Measured over the
+    # ---- eligible bet-set rows, 20 of 57 graded plays never earn a measured close
+    # ---- (coverage 65%), and the misses are not random: 15 of 20 have a first
+    # ---- pitch between 17:00 and 20:00 UTC. Those are day games. They are entered
+    # ---- at the 15:00 run and the next observation is 21:30, which is AFTER first
+    # ---- pitch, so close_obs stays 0 and the row is excluded from the endpoint
+    # ---- rather than counted as zero. There is a 6.5-hour hole in the schedule and
+    # ---- the day slate starts inside it.
+    # ----
+    # ---- A run here sits before first pitch for ~18 of those 20 misses, taking
+    # ---- coverage from ~65% to ~96% and the arrival rate from ~4.5 to ~6.7
+    # ---- qualifying closes/week. That is the difference between roughly 13 weeks
+    # ---- and roughly 9 weeks to a callable verdict on the model — and it buys the
+    # ---- rows for free, from bets already being made.
+    # ----
+    # ---- COST: h2h-only, so 2 credits/run = ~62/month (~31 with RS_BOOKMAKERS=1).
+    # ---- Uncomment when the budget allows; the startup CREDIT WARNING prints the
+    # ---- projection for the active sports either way.
+    # - cron: '30 17 * * *'
     # ---- 13:30 UTC observe (opener board, snapshots + closes, NEVER logs plays):
     # ---- uncomment ONLY after a `mode: verify` dispatch run prints PASS and
     # ---- RS_BOOKMAKERS below is set to '1'. Without F26 this run costs 6
@@ -43,7 +62,12 @@ jobs:
         env:
           ODDS_KEY: ${{ secrets.ODDS_KEY }}
           # Manual dispatch uses the chosen mode; scheduled runs map by cron entry.
-          RS_MODE: ${{ inputs.mode || ((github.event.schedule == '45 22 * * *' || github.event.schedule == '45 1 * * *') && 'close' || (github.event.schedule == '30 13 * * *' && 'observe' || 'full')) }}
+          # '30 17 * * *' is mapped to close HERE, while its cron is still commented
+          # out, on purpose: if it were ever uncommented without this entry it would
+          # fall through to 'full' and start LOGGING PLAYS at 17:30 — a change to
+          # entry timing that nobody ordered, and the exact failure mode RS_MODE
+          # =observe was introduced to prevent. Mapping first makes uncommenting safe.
+          RS_MODE: ${{ inputs.mode || ((github.event.schedule == '45 22 * * *' || github.event.schedule == '45 1 * * *' || github.event.schedule == '30 17 * * *') && 'close' || (github.event.schedule == '30 13 * * *' && 'observe' || 'full')) }}
           # F26 named-bookmaker fetch. '0' = OFF (regions=us,eu, current billing).
           # Set to '1' ONLY after a `mode: verify` dispatch run prints PASS
           # (checks Bovada/Pinnacle coverage AND that exchange h2h_lay rows do
