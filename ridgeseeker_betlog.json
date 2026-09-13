@@ -31746,8 +31746,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392309+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -12.39,
       "hours_to_game": 99.56,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -31777,8 +31777,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -5.26,
+      "clv_measured": true
     },
     {
       "away": "Iowa State Cyclones",
@@ -31824,8 +31826,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392313+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -17.35,
       "hours_to_game": 101.06,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -31855,8 +31857,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -5.52,
+      "clv_measured": true
     },
     {
       "away": "Texas Tech Red Raiders",
@@ -31902,8 +31906,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392318+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 8.33,
+      "clv_fair": -50.26,
       "hours_to_game": 101.06,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -31933,8 +31937,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -14.78,
+      "clv_measured": true
     },
     {
       "away": "Houston Astros",
@@ -32978,11 +32984,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392393+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -12.39,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.26,
+      "clv_measured": true
     },
     {
       "away": "Jacksonville State Gamecocks",
@@ -33026,11 +33034,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392398+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.33,
+      "clv_fair": -2.05,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -1.48,
+      "clv_measured": true
     },
     {
       "away": "Tulsa Golden Hurricane",
@@ -33074,11 +33084,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392403+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 3.92,
+      "clv_fair": -14.22,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -2.43,
+      "clv_measured": true
     },
     {
       "away": "Navy Midshipmen",
@@ -33122,11 +33134,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392407+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.17,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -2.89,
+      "clv_measured": true
     },
     {
       "away": "Iowa State Cyclones",
@@ -33170,11 +33184,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392412+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -17.35,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.52,
+      "clv_measured": true
     },
     {
       "away": "Ohio State Buckeyes",
@@ -33218,11 +33234,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392416+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.5,
+      "clv_fair": -3.72,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -3.41,
+      "clv_measured": true
     },
     {
       "away": "Texas Tech Red Raiders",
@@ -33266,11 +33284,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392421+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 8.33,
+      "clv_fair": -50.26,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -14.78,
+      "clv_measured": true
     },
     {
       "away": "Arkansas Razorbacks",
@@ -33314,11 +33334,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392426+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -16.0,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -6.63,
+      "clv_measured": true
     },
     {
       "away": "Chicago Cubs",
@@ -33610,11 +33632,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392437+00:00",
       "close_obs": 8,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.7,
+      "clv_fair": -6.97,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -1.14,
+      "clv_measured": true
     },
     {
       "away": "Georgia Southern Eagles",
@@ -33658,11 +33682,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392441+00:00",
       "close_obs": 8,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.86,
+      "clv_fair": -30.16,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -4.95,
+      "clv_measured": true
     },
     {
       "away": "New England Patriots",
@@ -34316,11 +34342,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392456+00:00",
       "close_obs": 5,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 4.26,
+      "clv_fair": -11.65,
       "date": "2026-09-09",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -1.59,
+      "clv_measured": true
     },
     {
       "away": "Louisiana Tech Bulldogs",
@@ -34366,8 +34394,8 @@
       "close_point": 35.0,
       "close_ts": "2026-09-10T23:18:56.392462+00:00",
       "close_obs": 2,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.7,
       "hours_to_game": 72.08,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -34397,8 +34425,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-09",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.95,
+      "clv_fair_mult": -4.59,
+      "clv_measured": true
     },
     {
       "away": "Pittsburgh Pirates",
@@ -34544,8 +34574,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392467+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.7,
+      "clv_fair": -6.97,
       "hours_to_game": 52.74,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -34575,8 +34605,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-10",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 2.8,
+      "clv_fair_mult": -1.14,
+      "clv_measured": true
     },
     {
       "away": "Middle Tennessee Blue Raiders",
@@ -34622,8 +34654,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392471+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -18.8,
       "hours_to_game": 52.74,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -34653,8 +34685,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-10",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -6.59,
+      "clv_measured": true
     },
     {
       "away": "Georgia Southern Eagles",
@@ -34700,8 +34734,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392476+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -32.1,
       "hours_to_game": 53.24,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -34731,8 +34765,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-10",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -7.59,
+      "clv_measured": true
     },
     {
       "away": "Texas Rangers",
@@ -34826,11 +34862,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392483+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -18.8,
       "date": "2026-09-10",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -6.59,
+      "clv_measured": true
     },
     {
       "away": "Villanova Wildcats",
