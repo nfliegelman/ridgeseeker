@@ -1332,8 +1332,12 @@ function renderResults(){
       Last full board: <b>${og.last_full||'?'} UTC</b> (~${og.typical||'?'} games/run is normal).
       ${og.partial?`Then <b>${og.since} UTC returned only ${og.last_games} games</b> — a partial fetch — and every run since has returned zero.`:`Last run with any odds: ${og.since||'?'} UTC.`}
       Action Network is still answering (${og.an_ok} games), so this is the Odds API specifically, not the network.
-      <b>While this is down nothing is logged, no closes are captured, and the verdict clock is frozen</b> —
-      pending bets can age out to void at 72h.
+      <b>What stops:</b> no new plays are logged, no closes are captured, and the verdict clock is frozen —
+      every run in this streak is a permanently missing close observation, and closes are the metric that
+      decides whether the model works.
+      <b>What keeps working:</b> grading. Final scores come from Action Network, not the Odds API, so settled
+      bets keep resolving normally and pending bets are NOT at risk of the 72h void during an odds-only
+      outage. (That void risk applies when AN is the feed that is down.)
       <div style="margin-top:6px"><b>${og.partial?'This is almost certainly exhausted monthly Odds API credits.':'Most likely cause: exhausted monthly Odds API credits.'}</b>
       A partial run followed by zeroes, while AN stays healthy, is the quota signature — an upstream outage
       cuts off cleanly instead. Check the startup CREDIT WARNING
@@ -2202,6 +2206,14 @@ def compute_stats(log_path, snap_path, unit_dollars):
     # exhaustion, and its signature is distinctive — a partial run (quota runs out
     # mid-fetch) followed by zeroes, while an_games stays healthy. Distinguishing that
     # from "the API is down" matters because the fixes are opposite: wait, versus pay.
+    #
+    # Scope of the damage, verified against a live outage: grading is NOT affected.
+    # Final scores come from Action Network via collect_results, so settled bets keep
+    # resolving and pending bets are not exposed to the 72h void rule during an
+    # odds-only outage — 22 bets graded normally across the 8 dead runs of the
+    # 2026-09-11 incident. What is lost is unrecoverable in a different way: every run
+    # in the streak is a close observation that can never be taken again, and closes
+    # are the only metric that resolves the model on a human timescale.
     outage=None
     try:
         _rl=json.load(open(os.path.join(os.path.dirname(log_path),'ridgeseeker_runlog.json'))).get('runs',[])
