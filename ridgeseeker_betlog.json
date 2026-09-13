@@ -31666,8 +31666,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392304+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 6.38,
+      "clv_fair": 0.59,
       "hours_to_game": 97.31,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -31697,8 +31697,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.5,
+      "clv_fair_mult": 1.84,
+      "clv_measured": true
     },
     {
       "away": "Buffalo Bulls",
@@ -32676,11 +32678,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392361+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -5.77,
+      "clv_fair": -9.59,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -7.96,
+      "clv_measured": true
     },
     {
       "away": "Eastern Michigan Eagles",
@@ -32824,11 +32828,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392375+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.94,
+      "clv_fair": -11.12,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -6.7,
+      "clv_measured": true
     },
     {
       "away": "UTSA Roadrunners",
@@ -32872,11 +32878,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392380+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.85,
+      "clv_fair": -2.55,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -2.82,
+      "clv_measured": true
     },
     {
       "away": "UNLV Rebels",
@@ -32920,11 +32928,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392389+00:00",
       "close_obs": 9,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 6.38,
+      "clv_fair": 0.59,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": 1.84,
+      "clv_measured": true
     },
     {
       "away": "Buffalo Bulls",
