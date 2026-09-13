@@ -25174,11 +25174,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392234+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -12.28,
+      "clv_fair": -18.51,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -16.49,
+      "clv_measured": true
     },
     {
       "away": "Buffalo Bills",
@@ -25222,11 +25224,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392241+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 6.06,
+      "clv_fair": 2.33,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": 2.05,
+      "clv_measured": true
     },
     {
       "away": "Chicago Bears",
@@ -25270,11 +25274,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392247+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 4.94,
+      "clv_fair": 1.73,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": 0.93,
+      "clv_measured": true
     },
     {
       "away": "Tampa Bay Buccaneers",
@@ -25318,11 +25324,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392253+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.82,
+      "clv_fair": -3.06,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -1.05,
+      "clv_measured": true
     },
     {
       "away": "Cleveland Browns",
@@ -25366,11 +25374,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392258+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.44,
+      "clv_fair": -14.18,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -8.11,
+      "clv_measured": true
     },
     {
       "away": "New Orleans Saints",
@@ -25414,11 +25424,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392264+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -1.37,
+      "clv_fair": -9.66,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.03,
+      "clv_measured": true
     },
     {
       "away": "Arizona Cardinals",
@@ -33584,11 +33596,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392432+00:00",
       "close_obs": 8,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.5,
       "date": "2026-09-08",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.31,
+      "clv_measured": true
     },
     {
       "away": "Georgia State Panthers",
