@@ -24408,8 +24408,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392224+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 8.16,
+      "clv_fair": 3.04,
       "hours_to_game": 307.71,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -24439,8 +24439,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": 4.39,
+      "clv_measured": true
     },
     {
       "away": "UMass Minutemen",
@@ -25474,11 +25476,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392270+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 4.4,
+      "clv_fair": -10.16,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -1.99,
+      "clv_measured": true
     },
     {
       "away": "Green Bay Packers",
@@ -25522,11 +25526,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392275+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.38,
+      "clv_fair": -6.63,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -6.22,
+      "clv_measured": true
     },
     {
       "away": "Miami Dolphins",
@@ -25570,11 +25576,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392280+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 8.16,
+      "clv_fair": 3.04,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": 4.39,
+      "clv_measured": true
     },
     {
       "away": "Denver Broncos",
