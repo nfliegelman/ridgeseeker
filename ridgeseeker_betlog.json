@@ -24330,8 +24330,8 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392205+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.22,
+      "clv_fair": -1.82,
       "hours_to_game": 335.54,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -24361,8 +24361,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.5,
+      "clv_fair_mult": -1.12,
+      "clv_measured": true
     },
     {
       "away": "Miami Dolphins",
@@ -25626,11 +25628,13 @@
       "close_point": null,
       "close_ts": "2026-09-10T23:18:56.392285+00:00",
       "close_obs": 40,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 2.22,
+      "clv_fair": -1.82,
       "date": "2026-09-01",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -1.12,
+      "clv_measured": true
     },
     {
       "away": "Colorado Buffaloes",
