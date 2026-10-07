@@ -45150,11 +45150,13 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:57.039901+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.94,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.06,
+      "clv_measured": false
     },
     {
       "away": "Utah Mammoth",
