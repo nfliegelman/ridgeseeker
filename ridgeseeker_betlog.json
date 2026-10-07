@@ -44204,8 +44204,8 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:57.039901+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.16,
       "hours_to_game": 3.05,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -44235,8 +44235,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.53,
+      "clv_fair_mult": -4.93,
+      "clv_measured": false
     },
     {
       "away": "Tulsa Golden Hurricane",
@@ -45200,11 +45202,13 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:57.039901+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.16,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.93,
+      "clv_measured": false
     },
     {
       "away": "Vegas Golden Knights",
@@ -45248,11 +45252,13 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:57.039901+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.71,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -3.7,
+      "clv_measured": false
     },
     {
       "away": "Florida Panthers",
@@ -45296,11 +45302,13 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:57.039901+00:00",
       "close_obs": 0,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.61,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.75,
+      "clv_measured": false
     },
     {
       "away": "South Alabama Jaguars",
