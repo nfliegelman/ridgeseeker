@@ -41632,11 +41632,13 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:56.955739+00:00",
       "close_obs": 7,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.74,
       "date": "2026-10-05",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -2.85,
+      "clv_measured": true
     },
     {
       "away": "Sam Houston State Bearkats",
