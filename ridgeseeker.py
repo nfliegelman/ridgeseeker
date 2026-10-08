@@ -232,9 +232,21 @@ GRADE_THRESHOLDS = {
 # worse closes once longshots were gone, and a structural argument that fails its own
 # empirical test does not get to veto money.
 #
-# So CFB stays live, ON WATCH: n=10 measured rows is ~5-6 independent games, most from
-# one opening-weekend slate, and its median entry is still 95 hours pre-game. If the
-# next 30 rows revert to the earlier pattern, drop 'ncaaf' from this set.
+# CFB was cleared provisionally on n=10 measured rows (~5-6 independent games, mostly
+# one opening-weekend slate) with the note "if the next 30 rows revert, drop it".
+# RESOLVED 2026-10-08 at n=35 — it did not revert, it improved, and the clearance is
+# now confirmed on a real sample rather than a hunch:
+#
+#   CFB cap + v15 bet set   Sep 12: n=12  mean -2.78  med -3.63
+#                           Oct 08: n=35  mean -1.32  med -0.98   22-14, +11.34u
+#   MLB cap + v15 bet set   Oct 08: n=31  mean -1.22  med -3.52   21-30, -1.85u
+#
+# Post-cap CFB now matches the MLB bet set the thresholds were actually fitted on, and
+# the price cap is visibly doing the work: CFB all rows -12.89, capped -2.79, capped
+# plus bet set -1.32, monotonic. The structural oddities (4% median ticket share, 93.6%
+# passing "contrarian", 40% of the board grading A) are real but did not translate into
+# worse closes once longshots were excluded — which is why the empirical test, not the
+# structural argument, decided this.
 #
 # NFL (window opens in September), NBA/NHL (October) and CBB have ZERO graded rows and
 # stay measurement-only. That is the actual lesson: not "baseball thresholds are

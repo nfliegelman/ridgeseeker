@@ -162,6 +162,32 @@ On GitHub the workflow commits these back so state persists across ephemeral run
 
 ## Changelog
 
+- **v15.6b (2026-10-08), two watch items resolved by three and a half weeks of live data. Code change is one comment block; the findings are the point.**
+
+  **(1) CFB's provisional clearance is CONFIRMED.** v15.4 cleared `ncaaf` for real money on n=10 measured rows and flagged "if the next 30 rows revert toward the earlier -20 mean, drop it." At n=35 it did not revert — it improved, and now matches the board the thresholds were actually fitted on:
+
+  | slice | Sep 12 | Oct 08 |
+  |---|---|---|
+  | CFB cap + v15 bet set | n=12, mean -2.78, med -3.63 | **n=35, mean -1.32, med -0.98**, 22-14, +11.34u |
+  | MLB cap + v15 bet set | — | n=31, mean -1.22, med -3.52, 21-30, -1.85u |
+
+  The price cap is visibly carrying it: CFB all rows -12.89, capped -2.79, capped + bet set -1.32, monotonic. Worth noting CFB's raw record looks *good* right now (+4.44u, +8.2% ROI across all staked rows) on an all-rows CLV of **-9.59** — a textbook winning record on prices that close against you, and precisely why the per-sport table puts EV-at-close next to ROI.
+
+  **(2) The odds outage is a monthly quota cycle, now fully characterized.** The feed recovered 2026-10-01 with 178 games — a calendar reset, not a fix — ran 7 days, showed a 4-game partial on 10-07 01:48, and has been at zero since. Uptime by month tracks sports entering season exactly: **July 96.4%** (MLB only), **August 52.1%** (CFB joined), **September 35.0%** (alive 11 of 30 days), October alive 7 days before dying. 144 dead runs across the history. The tool now works roughly the first week of each month and is blind for the rest.
+
+  **(3) Both unmerged gates are being validated in real money while they sit in the PR.** October brought NBA and NHL into the registry, and under live v14 the uncalibrated boards are staking:
+
+  | sport | in CALIBRATED_SPORTS | staked | settled | record | units | ROI | CLV |
+  |---|---|---|---|---|---|---|---|
+  | MLB | yes | 79 | 79 | 33-46 | -5.34 | -6.1% | -2.10 |
+  | NCAAF | yes | 59 | 48 | 20-28 | +4.44 | +8.2% | -9.59 |
+  | **NFL** | **no** | 13 | 9 | 2-7 | **-4.37** | **-43.7%** | -5.78 |
+  | **NHL** | **no** | 3 | 3 | 2-1 | +1.83 | +52.3% | -2.66 |
+
+  v15.4's gate blocks every NFL and NHL row (net -2.54u so far), and 4 of 13 NFL stakes were priced above +250, which v15.3's cap would also have refused. The gate's thesis is being tested with money instead of argument, and it is passing.
+
+- **v15.6a (2026-09-13), outage-banner correction. MODEL_VERSION unchanged.** The v15.6 banner claimed pending bets "can age out to void at 72h" during an odds outage. Wrong for this outage class: 22 bets graded normally across the 8 dead runs of the 2026-09-11 incident, because final scores come from Action Network via `collect_results`, not the Odds API. The 72h void rule bites when AN is the feed that is down, which is a different failure. The banner now separates what stops (new plays, close capture, the verdict clock) from what keeps working (grading), and names the damage that IS permanent: every run in the streak is a close observation that can never be retaken.
+
 - **v15.6 (2026-09-12), per-sport ledger + feed-outage alarm. MODEL_VERSION unchanged: reporting only.**
 
   **LIVE INCIDENT THIS FOUND: the Odds API has returned zero games since 2026-09-11 and nobody noticed for two days.** Runlog signature: a full board on 09-10 23:18 (~126 games/run is typical), then 09-11 00:33 returned only **14 games** — a partial fetch — then six consecutive runs at zero while Action Network kept answering 91-101 games. That shape is exhausted monthly credits, not an upstream outage (an outage cuts off cleanly; a quota runs out mid-run). Confirmed by the projection: September has three sports in season (MLB, NFL, CFB), which on regions billing is `3 x (2 full x 6 + 2 close x 2) x 31 = ~1488 credits/month` against `PLAN_CREDITS=500`. October adds NBA and NHL (~2480), November adds CBB (~2976). Even `RS_BOOKMAKERS=1` only halves it to ~744, still over the free tier. **The free tier is structurally dead for a multi-sport autumn; the $30 20K plan is the only real fix.** While the feed is down nothing is logged, no closes are captured, the verdict clock is frozen, and pending bets can age out to void at 72h.
