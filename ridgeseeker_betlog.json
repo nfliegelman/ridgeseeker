@@ -42084,11 +42084,13 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:56.955792+00:00",
       "close_obs": 7,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.64,
       "date": "2026-10-05",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -4.31,
+      "clv_measured": true
     },
     {
       "away": "Sacramento State Hornets",
@@ -42132,11 +42134,13 @@
       "close_point": null,
       "close_ts": "2026-10-06T20:06:56.955798+00:00",
       "close_obs": 7,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -7.35,
+      "clv_fair": -14.51,
       "date": "2026-10-05",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -9.8,
+      "clv_measured": true
     },
     {
       "away": "North Carolina Tar Heels",
