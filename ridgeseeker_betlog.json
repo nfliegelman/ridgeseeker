@@ -44538,8 +44538,8 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231157+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.35,
       "hours_to_game": 116.88,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -44569,8 +44569,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -2.69,
+      "clv_measured": true
     },
     {
       "away": "San Francisco 49ers",
@@ -44616,8 +44618,8 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231164+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.43,
       "hours_to_game": 120.3,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -44647,8 +44649,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.35,
+      "clv_fair_mult": -4.47,
+      "clv_measured": true
     },
     {
       "away": "Arizona Wildcats",
@@ -44872,11 +44876,13 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231183+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -3.77,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.16,
+      "clv_measured": true
     },
     {
       "away": "Las Vegas Raiders",
@@ -44920,11 +44926,13 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231188+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.35,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -2.69,
+      "clv_measured": true
     },
     {
       "away": "Minnesota Vikings",
@@ -44968,11 +44976,13 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231193+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.45,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.03,
+      "clv_measured": true
     },
     {
       "away": "New York Giants",
@@ -45016,11 +45026,13 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231199+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -4.93,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -3.38,
+      "clv_measured": true
     },
     {
       "away": "Detroit Lions",
@@ -45064,11 +45076,13 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231204+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.7,
+      "clv_fair": -0.63,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -2.03,
+      "clv_measured": true
     },
     {
       "away": "San Francisco 49ers",
@@ -45112,11 +45126,13 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231209+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.43,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.47,
+      "clv_measured": true
     },
     {
       "away": "Baltimore Ravens",
