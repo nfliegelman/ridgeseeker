@@ -44220,8 +44220,8 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231130+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -2.43,
       "hours_to_game": 124.22,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -44251,8 +44251,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.5,
+      "clv_fair_mult": -3.29,
+      "clv_measured": true
     },
     {
       "away": "Utah Mammoth",
@@ -45176,11 +45178,13 @@
       "close_point": null,
       "close_ts": "2026-10-07T00:53:45.231214+00:00",
       "close_obs": 1,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -2.43,
       "date": "2026-10-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -3.29,
+      "clv_measured": true
     },
     {
       "away": "Buffalo Bills",
