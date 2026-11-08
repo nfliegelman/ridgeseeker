@@ -54234,11 +54234,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569635+00:00",
       "close_obs": 6,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.22,
+      "clv_fair": -4.33,
       "date": "2026-11-05",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -2.94,
+      "clv_measured": true
     },
     {
       "away": "Denver Broncos",
