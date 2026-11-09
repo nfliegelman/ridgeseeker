@@ -50898,8 +50898,8 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569565+00:00",
       "close_obs": 14,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.22,
+      "clv_fair": -4.15,
       "hours_to_game": 120.57,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -50929,8 +50929,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-11-03",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 1.48,
+      "clv_fair_mult": -2.7,
+      "clv_measured": true
     },
     {
       "away": "Buffalo Bulls",
@@ -51294,11 +51296,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569585+00:00",
       "close_obs": 14,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -20.16,
+      "clv_fair": -23.88,
       "date": "2026-11-03",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -22.61,
+      "clv_measured": true
     },
     {
       "away": "New York Giants",
@@ -51342,11 +51346,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569593+00:00",
       "close_obs": 14,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 5.31,
+      "clv_fair": -0.28,
       "date": "2026-11-03",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": 1.22,
+      "clv_measured": true
     },
     {
       "away": "Arizona Cardinals",
@@ -51390,11 +51396,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569600+00:00",
       "close_obs": 14,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 34.15,
+      "clv_fair": 18.56,
       "date": "2026-11-03",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": 28.31,
+      "clv_measured": true
     },
     {
       "away": "Green Bay Packers",
@@ -51438,11 +51446,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569605+00:00",
       "close_obs": 14,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 1.22,
+      "clv_fair": -4.15,
       "date": "2026-11-03",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -2.7,
+      "clv_measured": true
     },
     {
       "away": "Philadelphia 76ers",
@@ -53008,8 +53018,8 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569622+00:00",
       "close_obs": 10,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -11.62,
       "hours_to_game": 96.22,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -53039,8 +53049,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-11-04",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.0,
+      "clv_fair_mult": -4.35,
+      "clv_measured": true
     },
     {
       "away": "Minnesota Timberwolves",
@@ -54284,11 +54296,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569640+00:00",
       "close_obs": 6,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -2.17,
+      "clv_fair": -6.0,
       "date": "2026-11-05",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.08,
+      "clv_measured": true
     },
     {
       "away": "Los Angeles Rams",
@@ -54332,11 +54346,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569646+00:00",
       "close_obs": 6,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -0.67,
+      "clv_fair": -3.34,
       "date": "2026-11-05",
-      "result": null,
-      "units_pl": null
+      "result": "win",
+      "units_pl": 0.0,
+      "clv_fair_mult": -4.69,
+      "clv_measured": true
     },
     {
       "away": "Houston Texans",
@@ -54380,11 +54396,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569652+00:00",
       "close_obs": 6,
-      "clv": null,
-      "clv_fair": null,
+      "clv": -1.59,
+      "clv_fair": -9.11,
       "date": "2026-11-05",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -5.55,
+      "clv_measured": true
     },
     {
       "away": "Orlando Magic",
@@ -54780,8 +54798,8 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569659+00:00",
       "close_obs": 2,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 0.0,
+      "clv_fair": -5.31,
       "hours_to_game": 45.21,
       "kalshi_ticker": null,
       "kalshi_bid": null,
@@ -54811,8 +54829,10 @@
       "park_rf_approx": null,
       "probable_changed": null,
       "date": "2026-11-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -1.5,
+      "clv_fair_mult": -3.88,
+      "clv_measured": true
     },
     {
       "away": "Tulsa Golden Hurricane",
@@ -55336,11 +55356,13 @@
       "close_point": null,
       "close_ts": "2026-11-07T02:21:48.569668+00:00",
       "close_obs": 2,
-      "clv": null,
-      "clv_fair": null,
+      "clv": 3.51,
+      "clv_fair": -4.06,
       "date": "2026-11-06",
-      "result": null,
-      "units_pl": null
+      "result": "loss",
+      "units_pl": -0.0,
+      "clv_fair_mult": -1.28,
+      "clv_measured": true
     },
     {
       "away": "Washington Wizards",
