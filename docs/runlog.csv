@@ -1,5 +1,4 @@
 ts,mode,model_version,odds_games,an_games,unmatched,bov_absent,ctx_misses,plays_logged,closes,graded
-2026-07-15T16:37:57.108831+00:00,full,2026-07-04.v13-research1,1,1,0,1,0,0,0,0
 2026-07-15T22:28:31.725124+00:00,full,2026-07-04.v13-research1,2,1,0,1,0,0,0,0
 2026-07-15T23:40:11.634614+00:00,close,2026-07-04.v13-research1,2,1,0,1,,0,0,0
 2026-07-16T16:22:22.441713+00:00,full,2026-07-04.v13-research1,5,1,0,0,0,0,0,0
@@ -499,3 +498,4 @@ ts,mode,model_version,odds_games,an_games,unmatched,bov_absent,ctx_misses,plays_
 2026-11-21T03:29:22.239017+00:00,close,2026-07-21.v14-suppressfix1,0,109,0,0,,0,0,0
 2026-11-21T08:48:13.702974+00:00,close,2026-07-21.v14-suppressfix1,0,103,0,0,,0,0,0
 2026-11-21T20:50:58.978657+00:00,full,2026-07-21.v14-suppressfix1,0,104,0,0,0,0,0,0
+2026-11-22T01:28:34.728965+00:00,full,2026-07-21.v14-suppressfix1,0,104,0,0,0,0,0,0
